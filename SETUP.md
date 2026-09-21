@@ -17,7 +17,7 @@
 - API: Drive, Cloud Vision, Cloud Storage, Cloud Tasks, Cloud Run, Cloud Scheduler, Secret Manager, Cloud Build, Artifact Registry.
 - 비공개 GCS 버킷: Uniform bucket-level access + Public access prevention. 수명주기 자동 삭제는 설정하지 않습니다.
 - Cloud Tasks 큐: `sj-receipts`, 동시 실행 2, 초당 실행 2, 최대 전달 시도 5, 최소 backoff 30초. 작업 본문은 영수증이 아닌 작업 ID만 포함합니다.
-- Cloud Run 처리 서비스: Node 컨테이너, 요청 제한 600초, 1 CPU/1GiB 이상, concurrency 4, min instances 0, max instances 2로 테스트를 시작합니다. 부하 측정 후 조정합니다. worker URL은 애플리케이션에서 OIDC로 인증합니다. 웹 화면은 Vercel에서 제공합니다.
+- Cloud Run 처리 서비스: Node 컨테이너, 요청 제한 600초, 1 CPU/2GiB, concurrency 2, min instances 0, max instances 2로 테스트를 시작합니다. 부하 측정 후 조정합니다. Cloud Run IAM은 작업호출 계정만 허용하고, 앱도 OIDC audience와 호출 계정을 검증합니다. 웹 화면은 Vercel에서 제공합니다.
 - Cloud Scheduler: 매분 `POST WORKER_BASE_URL/api/jobs/reconcile`, OIDC audience는 WORKER_BASE_URL, 서비스 계정은 TASK_SERVICE_ACCOUNT_EMAIL. 이 스케줄러가 없으면 접수/작업 복구를 보장할 수 없습니다.
 - GCS CORS: 실제 Vercel APP_URL origin의 POST/GET/HEAD만 허용합니다. 5분 서명 form은 파일 크기와 staging 경로로 한정됩니다. 완전 수신·해시·이미지 검증 후에만 서버 원본 경로로 저장하므로 브라우저가 접수 원본을 덮어쓸 수 없습니다.
 
@@ -59,9 +59,11 @@ npm run build
 
 Dockerfile의 기본 target은 실행용 standalone 서버입니다. `migrator` target은 DB 마이그레이션 실행용입니다. DB 마이그레이션은 앱 요청에서 자동 실행하지 않으며 배포 전에 1회 실행합니다.
 
+배포 의존성 검증은 Linux/Node 22에서 `npm ci`로 수행합니다. Windows에서 lockfile을 다시 만들면 선택적 WASM 의존성이 누락될 수 있으므로 Linux에서 복구하고 clean install을 확인한 뒤 커밋합니다. Google 클라이언트가 동적으로 읽는 JSON 파일은 `next.config.ts`에서 명시적으로 포함하며, Docker 실행 이미지 안에서 Google/Prisma/이미지 라이브러리를 실제 import해 누락을 검사합니다.
+
 ### Supabase DB 연결
 
-- 무료 조직에 새 `sj-receipt-camera` 프로젝트를 생성합니다. 무료 프로젝트 개수 제한에 걸리거나 유료 조직만 있으면 추가 비용을 확인하기 전 생성하지 않습니다.
+- 전용 `sj-receipt-camera` 프로젝트를 사용합니다. 2026-09-21 소유자가 조직을 Pro로 변경한 뒤 새 프로젝트를 생성했습니다. 다른 서비스의 DB는 재사용하거나 삭제하지 않습니다. 추가 유료 리소스나 상위 사양 변경은 별도로 확인합니다.
 - Connect → Session pooler의 **5432 포트** 연결 문자열을 DATABASE_URL로 설정합니다. IPv4 환경에서도 접속 가능하며 이 작은 Cloud Run 서비스는 DB_POOL_SIZE=3으로 시작합니다. 6543 transaction pooler 주소를 마이그레이션에 사용하지 않습니다.
 - Supabase API Settings에서 **Data API를 비활성화**합니다. 브라우저용 anon/publishable key나 service_role key는 앱에서 필요하지 않습니다.
 - Prisma migration은 테이블 소유자 역할로 적용합니다. 포함된 private_access migration이 모든 앱 테이블에서 RLS를 활성화하고 anon/authenticated 권한을 제거합니다. 서버 API가 로그인 계정의 소유권을 추가 검증합니다.
