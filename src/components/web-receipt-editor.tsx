@@ -1,6 +1,7 @@
 "use client";
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { ArrowLeft, Check, ExternalLink, FileText, Minus, Plus, Save, Trash2 } from "lucide-react";
@@ -11,6 +12,7 @@ import { displayText } from "@/lib/i18n";
 import { useApp } from "./app-provider";
 import { useLanguage } from "./language-provider";
 import { Status } from "./status";
+import { ReceiptTrashButton } from "./receipt-trash-button";
 
 type TaxDraft = { rate: string; taxableYen: string; taxYen: string };
 type Draft = { merchant: string; transactionDate: string; totalYen: string; paymentMethod: string; registrationNumber: string; category: string; summary: string; taxes: TaxDraft[] };
@@ -30,32 +32,41 @@ function editValues(draft: Draft): ReceiptEdit["values"] {
   return { merchant: text(draft.merchant), transactionDate: text(draft.transactionDate), totalYen: numberValue(draft.totalYen), paymentMethod: text(draft.paymentMethod), registrationNumber: text(draft.registrationNumber)?.toUpperCase() ?? null, category: text(draft.category), summary: text(draft.summary), taxes: draft.taxes.map(tax => ({ rate: numberValue(tax.rate, true), taxableYen: numberValue(tax.taxableYen), taxYen: numberValue(tax.taxYen) })).filter(tax => Object.values(tax).some(value => value !== null)) };
 }
 export function WebReceiptEditor({ id }: { id: string }) {
+  const router = useRouter();
   const { t, locale } = useLanguage();
   const { account } = useApp();
   const ownerId = account?.user?.id;
   const latestVersion = useRef(-1);
+  const loadGeneration = useRef(0);
   const [receipt, setReceipt] = useState<ReceiptView | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [version, setVersion] = useState(0);
   const [dirty, setDirty] = useState(false);
   const dirtyRef = useRef(false);
   const [loadError, setLoadError] = useState(false);
+  const [notFound, setNotFound] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [zoom, setZoom] = useState(1);
   const saveRequest = useRef<AbortController | null>(null);
   const load = useCallback(async (force = false, signal?: AbortSignal) => {
+    const generation = ++loadGeneration.current;
     try {
       const response = await fetch(`/api/receipts/${id}`, { cache: "no-store", signal });
+      if (signal?.aborted || generation !== loadGeneration.current) return;
+      if (response.status === 404) {
+        if (!signal?.aborted) { setNotFound(true); setReceipt(null); setDraft(null); dirtyRef.current = false; setDirty(false); }
+        return;
+      }
       if (!response.ok) throw new Error();
       const value = (await response.json()).receipt as ReceiptView;
-      if (signal?.aborted) return;
+      if (signal?.aborted || generation !== loadGeneration.current) return;
       if (value.version < latestVersion.current) return;
       latestVersion.current = value.version;
-      setReceipt(value); setLoadError(false);
+      setReceipt(value); setLoadError(false); setNotFound(false);
       if (force || !dirtyRef.current) { setDraft(toDraft(value)); setVersion(value.version); setDirty(false); dirtyRef.current = false; }
-    } catch { if (!signal?.aborted) setLoadError(true); }
+    } catch { if (!signal?.aborted && generation === loadGeneration.current) setLoadError(true); }
   }, [id]);
   useEffect(() => {
     if (!ownerId) return;
@@ -93,11 +104,13 @@ export function WebReceiptEditor({ id }: { id: string }) {
   };
   const reload = () => { if (!dirtyRef.current || window.confirm(t("未保存の変更を破棄しますか？"))) { setSaveError(null); setSaved(false); void load(true); } };
   if (account && !account.user) return <section className="card"><h1>{t("レシート管理")}</h1><p>{t("まだログインしていません。")}</p><button className="button primary" disabled={!account.loginReady} onClick={() => signIn("google", { callbackUrl: `/web/receipts/${id}` })}>{t("Googleでログイン")}</button></section>;
+  if (notFound) return <section className="empty-state"><h1>{t("レシートを表示できません")}</h1><p>{t("削除されたか、アクセスできないレシートです。")}</p><Link className="button secondary" href="/web/trash">{t("ゴミ箱を開く")}</Link><Link className="text-link" href="/web/receipts">{t("履歴に戻る")}</Link></section>;
   if (loadError && !receipt) return <section className="empty-state"><h1>{t("表示できませんでした")}</h1><p>{t("ログインと接続を確認してください。")}</p><button className="button secondary" onClick={reload}>{t("再読み込み")}</button></section>;
   if (!receipt || !draft) return <p className="loading-state">{t("読み込んでいます…")}</p>;
   const canEdit = ["DONE", "FAILED", "LIMIT_REACHED"].includes(receipt.ocrState);
   return <section className="web-editor">
     <Link className="back-link" href="/web/receipts"><ArrowLeft size={18} />{t("履歴に戻る")}</Link>
+    <div className="editor-trash-action"><ReceiptTrashButton receipt={receipt} disabled={saving} unsaved={dirty} onDeleted={() => { loadGeneration.current++; dirtyRef.current = false; setDirty(false); router.replace("/web/trash"); }} /></div>
     <div className="web-page-heading"><div><p className="eyebrow">{t("RECEIPT DETAILS")}</p><h1>{t("レシート詳細")}</h1><p className="page-lead">{t("原本を見ながら、読み取り内容を修正します。")}</p></div><Status receipt={receipt} /></div>
     <div className="editor-grid">
       <section className="editor-original card"><div className="image-toolbar"><h2>{t("原本画像")}</h2><button className="icon-button" onClick={() => setZoom(value => Math.max(0.5, value - 0.25))} aria-label={t("画像を縮小")}><Minus size={17} /></button><button className="icon-button" onClick={() => setZoom(value => Math.min(3, value + 0.25))} aria-label={t("画像を拡大")}><Plus size={17} /></button></div><div className="editor-image-scroll"><img src={`/api/receipts/${id}/image`} alt={t("撮影したレシートの原本")} style={{ width: `${zoom * 100}%` }} /></div><a className="text-link" href={`/api/receipts/${id}/image`} target="_blank" rel="noopener noreferrer">{t("原本を別のタブで開く")}<ExternalLink size={14} /></a><div className="two-actions">{(receipt.pdfState === "SAVED" || receipt.driveUrl) && <a className="button secondary" href={`/api/receipts/${id}/pdf`} target="_blank" rel="noopener noreferrer"><FileText size={16} />{t("PDFを見る")}</a>}{receipt.driveUrl && <a className="button secondary" href={receipt.driveUrl} target="_blank" rel="noopener noreferrer">{t("Driveで開く")}<ExternalLink size={14} /></a>}</div></section>

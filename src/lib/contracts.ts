@@ -28,3 +28,4 @@ export type ReceiptView = {
   values: ReceiptValues | null; reviewReasons: string[]; archiveError: string | null; ocrError: string | null;
   driveUrl: string | null;
 };
+export type TrashedReceiptView = Pick<ReceiptView, "id" | "version" | "merchant" | "transactionDate" | "totalYen"> & { deletedAt: string };

@@ -1,6 +1,10 @@
 import { displayText, type Locale } from "./i18n";
 export function errorMessage(code: string, locale: Locale = "ja") {
   const messages: Record<string, string> = {
+    TRASH_FAILED: "ゴミ箱に移動できませんでした。接続を確認して再試行してください。",
+    RESTORE_FAILED: "復元できませんでした。接続を確認して再試行してください。",
+    RECEIPT_CHANGED: "レシートの状態が更新されています。画面を更新してから、もう一度操作してください。",
+    NOT_FOUND: "削除されたか、アクセスできないレシートです。",
     SETTINGS_FAILED: "設定を保存できませんでした。もう一度お試しください。",
     PDF_ERROR: "PDFを保存できませんでした。原本写真は保持しています。状態を確認してください。",
     PDF_PENDING: "PDFの作成がまだ完了していません。しばらくしてからもう一度開いてください。",

@@ -5,7 +5,8 @@ import { PGlite } from "@electric-sql/pglite";
 import { PGLiteSocketServer } from "@electric-sql/pglite-socket";
 import sharp from "sharp";
 
-const mocks = vi.hoisted(() => ({ save: vi.fn(), exists: vi.fn(), read: vi.fn(), info: vi.fn(), archive: vi.fn(), metadata: vi.fn(), dispatch: vi.fn(), pdfExists: vi.fn(), savePdf: vi.fn() }));
+const mocks = vi.hoisted(() => ({ save: vi.fn(), exists: vi.fn(), read: vi.fn(), info: vi.fn(), archive: vi.fn(), metadata: vi.fn(), dispatch: vi.fn(), pdfExists: vi.fn(), savePdf: vi.fn(), vision: vi.fn() }));
+vi.mock("@google-cloud/vision", () => ({ ImageAnnotatorClient: class { batchAnnotateImages = mocks.vision; async close() {} } }));
 vi.mock("@/lib/storage", () => ({ saveImage: mocks.save, imageExists: mocks.exists, readImage: mocks.read, incomingInfo: mocks.info, incomingKey: (key: string) => `${key}.incoming`, pdfKey: (key: string) => `${key}.pdf`, pdfExists: mocks.pdfExists, savePdf: mocks.savePdf }));
 vi.mock("@/lib/drive", () => ({ archivePdf: mocks.archive, updatePdfMetadata: mocks.metadata }));
 vi.mock("@/lib/queue", () => ({ dispatchPending: mocks.dispatch }));
@@ -13,11 +14,13 @@ import { db } from "../src/lib/db";
 import { beginIntake, finishUpload, intake, ownedReceipt } from "../src/lib/receipts";
 import { claimJob, completeJob, reconcile, runJob } from "../src/lib/jobs";
 import { saveReceiptEdit } from "../src/lib/receipt-editor";
+import { listTrashedReceipts, setReceiptTrashed } from "../src/lib/receipt-trash";
 
 let pg: PGlite, server: PGLiteSocketServer, image: Buffer;
 let userId: string;
 beforeAll(async () => {
   vi.stubEnv("DATABASE_URL", "postgresql://postgres:postgres@127.0.0.1:5447/postgres"); vi.stubEnv("DB_POOL_SIZE", "1");
+  vi.stubEnv("GCP_PROJECT_ID", "unit-test-only");
   pg = await PGlite.create();
   await pg.exec(await readFile("prisma/migrations/202609210001_initial/migration.sql", "utf8"));
   await pg.exec('CREATE ROLE anon; CREATE ROLE authenticated;');
@@ -33,6 +36,98 @@ beforeEach(async () => {
   userId = (await db().user.create({ data: { googleSub: randomUUID(), email: `${randomUUID()}@example.test` } })).id;
 });
 describe("durable intake and jobs (real SQL, stubbed cloud boundaries)", () => {
+  it("moves owned receipts to trash and restores every stored value and revision", async () => {
+    const receipt = await intake(userId, randomUUID(), new Date(), image, "image/jpeg");
+    await db().receipt.update({ where: { id: receipt.id }, data: { ocrState: "DONE", pdfState: "SAVED", archiveState: "SAVED", driveFileId: "existing-test-drive-id", rawOcr: { text: "test evidence" } } });
+    const values = { merchant: "Trash test", transactionDate: "2026-09-21", totalYen: 100, taxes: [], paymentMethod: null, registrationNumber: null, category: null, summary: null };
+    const before = await saveReceiptEdit(userId, receipt.id, { version: 0, values });
+    await setReceiptTrashed(userId, receipt.id, before.version, true);
+    await expect(ownedReceipt(userId, receipt.id)).rejects.toThrow("NOT_FOUND");
+    await expect(saveReceiptEdit(userId, receipt.id, { version: before.version, values })).rejects.toThrow("NOT_FOUND");
+    await expect(intake(userId, receipt.captureId, new Date(), image, "image/jpeg")).rejects.toThrow("CAPTURE_ID_CONFLICT");
+    const trash = await listTrashedReceipts(userId, null);
+    expect(trash.receipts).toHaveLength(1);
+    expect(Object.keys(trash.receipts[0]).sort()).toEqual(["deletedAt", "id", "merchant", "totalYen", "transactionDate", "version"]);
+    await setReceiptTrashed(userId, receipt.id, trash.receipts[0].version, false);
+    const restored = await ownedReceipt(userId, receipt.id);
+    for (const key of ["objectKey", "checksum", "byteLength", "driveFileId", "rawOcr", "values", "userEdited", "pdfState", "ocrState", "archiveState"] as const) expect(restored[key]).toEqual(before[key]);
+    expect(restored.version).toBe(before.version + 2);
+    expect(await db().receiptRevision.count({ where: { receiptId: receipt.id } })).toBe(1);
+    expect((await db().usageDay.findFirstOrThrow({ where: { userId } })).intake).toBe(1);
+    await expect(saveReceiptEdit(userId, receipt.id, { version: before.version, values })).rejects.toThrow("EDIT_CONFLICT");
+    expect((await listTrashedReceipts(userId, null)).receipts).toHaveLength(0);
+  });
+  it("refuses other owners and stale or duplicate trash transitions atomically", async () => {
+    const receipt = await intake(userId, randomUUID(), new Date(), image, "image/jpeg");
+    await expect(setReceiptTrashed("other", receipt.id, 0, true)).rejects.toThrow("NOT_FOUND");
+    await expect(setReceiptTrashed(userId, receipt.id, 99, true)).rejects.toThrow("RECEIPT_CHANGED");
+    const deleted = await Promise.allSettled([setReceiptTrashed(userId, receipt.id, 0, true), setReceiptTrashed(userId, receipt.id, 0, true)]);
+    expect(deleted.filter(result => result.status === "fulfilled")).toHaveLength(1);
+    await expect(setReceiptTrashed("other", receipt.id, 1, false)).rejects.toThrow("NOT_FOUND");
+    expect((await listTrashedReceipts("other", null)).receipts).toHaveLength(0);
+    const restored = await Promise.allSettled([setReceiptTrashed(userId, receipt.id, 1, false), setReceiptTrashed(userId, receipt.id, 1, false)]);
+    expect(restored.filter(result => result.status === "fulfilled")).toHaveLength(1);
+    await expect(setReceiptTrashed(userId, receipt.id, 0, true)).rejects.toThrow("RECEIPT_CHANGED");
+  });
+  it("bounds trash pagination and refuses foreign or restored cursors", async () => {
+    for (let i = 0; i < 31; i++) await db().receipt.create({ data: { userId, captureId: randomUUID(), capturedAt: new Date(), objectKey: `unit-test-${randomUUID()}`, checksum: "unit-test", byteLength: 1, mimeType: "image/jpeg", intakeState: "ACCEPTED", deletedAt: new Date() } });
+    const first = await listTrashedReceipts(userId, null);
+    expect(first.receipts).toHaveLength(30); expect(first.nextCursor).toBeTruthy();
+    const second = await listTrashedReceipts(userId, first.nextCursor);
+    expect(second.receipts).toHaveLength(1); expect(second.nextCursor).toBeNull();
+    expect(first.receipts.some(row => row.id === second.receipts[0].id)).toBe(false);
+    await expect(listTrashedReceipts("other", first.nextCursor)).rejects.toThrow("INVALID_CURSOR");
+    await setReceiptTrashed(userId, first.nextCursor!, 0, false);
+    await expect(listTrashedReceipts(userId, first.nextCursor)).rejects.toThrow("INVALID_CURSOR");
+  });
+  it("pauses pending work in trash and resumes the same jobs without duplicate intake", async () => {
+    const receipt = await intake(userId, randomUUID(), new Date(), image, "image/jpeg");
+    const pdf = await db().job.findFirstOrThrow({ where: { receiptId: receipt.id, kind: "PDF" } });
+    await db().job.update({ where: { id: pdf.id }, data: { enqueuedAt: new Date() } });
+    await setReceiptTrashed(userId, receipt.id, 0, true);
+    expect(await claimJob(pdf.id)).toBeNull();
+    await setReceiptTrashed(userId, receipt.id, 1, false);
+    expect((await db().job.findUniqueOrThrow({ where: { id: pdf.id } })).enqueuedAt).toBeNull();
+    await runJob(pdf.id);
+    expect((await ownedReceipt(userId, receipt.id)).pdfState).toBe("SAVED");
+    expect(await db().job.count({ where: { receiptId: receipt.id } })).toBe(2);
+    expect(mocks.savePdf).toHaveBeenCalledOnce();
+  });
+  it("retains an in-flight PDF completion when the receipt is trashed during storage", async () => {
+    const receipt = await intake(userId, randomUUID(), new Date(), image, "image/jpeg");
+    const pdf = await db().job.findFirstOrThrow({ where: { receiptId: receipt.id, kind: "PDF" } });
+    mocks.savePdf.mockImplementationOnce(async () => { await setReceiptTrashed(userId, receipt.id, 0, true); });
+    await runJob(pdf.id);
+    const trashed = await db().receipt.findUniqueOrThrow({ where: { id: receipt.id } });
+    expect(trashed.deletedAt).not.toBeNull(); expect(trashed.pdfState).toBe("SAVED");
+    expect((await db().job.findUniqueOrThrow({ where: { id: pdf.id } })).state).toBe("DONE");
+    await setReceiptTrashed(userId, receipt.id, trashed.version, false);
+    await runJob(pdf.id); expect(mocks.savePdf).toHaveBeenCalledOnce();
+  });
+  it("retains OCR evidence and extracted values if trashed during the provider call", async () => {
+    const receipt = await intake(userId, randomUUID(), new Date(), image, "image/jpeg");
+    mocks.vision.mockImplementationOnce(async () => {
+      await setReceiptTrashed(userId, receipt.id, 0, true);
+      return [{ responses: [{ fullTextAnnotation: { text: "合計 1100円", pages: [] } }] }];
+    });
+    const ocr = await db().job.findFirstOrThrow({ where: { receiptId: receipt.id, kind: "OCR" } });
+    await runJob(ocr.id);
+    const trashed = await db().receipt.findUniqueOrThrow({ where: { id: receipt.id } });
+    expect(trashed.deletedAt).not.toBeNull(); expect(trashed.ocrState).toBe("DONE"); expect(trashed.totalYen).toBe(1100); expect(trashed.rawOcr).toBeTruthy();
+    await setReceiptTrashed(userId, receipt.id, trashed.version, false);
+    await runJob(ocr.id); expect(mocks.vision).toHaveBeenCalledOnce();
+  });
+  it("retains in-flight failure state in trash so restoration can retry coherently", async () => {
+    const receipt = await intake(userId, randomUUID(), new Date(), image, "image/jpeg");
+    const pdf = await db().job.findFirstOrThrow({ where: { receiptId: receipt.id, kind: "PDF" } });
+    mocks.savePdf.mockImplementationOnce(async () => { await setReceiptTrashed(userId, receipt.id, 0, true); throw new Error("storage unavailable"); });
+    await runJob(pdf.id);
+    const trashed = await db().receipt.findUniqueOrThrow({ where: { id: receipt.id } });
+    expect(trashed.pdfState).toBe("PENDING"); expect(trashed.pdfError).toBe("PDF_ERROR");
+    await setReceiptTrashed(userId, receipt.id, trashed.version, false);
+    const retry = await db().job.findUniqueOrThrow({ where: { id: pdf.id } });
+    expect(retry.state).toBe("PENDING"); expect(retry.attempts).toBe(1);
+  });
   it("stores PDF and OCR results without a Drive connection", async () => {
     const receipt = await intake(userId, randomUUID(), new Date(), image, "image/jpeg");
     expect(receipt.archiveState).toBe("NOT_REQUESTED");

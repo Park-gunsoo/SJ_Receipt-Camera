@@ -26,7 +26,8 @@ async function patchWithLease(id: string, token: string, patch: ReceiptPatch) {
     const fenced = await tx.job.updateMany({ where: { id, state: "RUNNING", leaseToken: token, leaseUntil: { gt: new Date() } }, data: { updatedAt: new Date() } });
     if (!fenced.count) throw new Error("LOST_LEASE");
     const job = await tx.job.findUniqueOrThrow({ where: { id } });
-    await tx.receipt.updateMany({ where: { id: job.receiptId, deletedAt: null }, data: patch });
+    // Claimed work may finish in trash. Retain its result so restoration never loses completion.
+    await tx.receipt.updateMany({ where: { id: job.receiptId }, data: patch });
   });
 }
 export async function completeJob(id: string, token: string, patch: ReceiptPatch = {}, expectedVersion?: number) {
@@ -34,7 +35,7 @@ export async function completeJob(id: string, token: string, patch: ReceiptPatch
     const completed = await tx.job.updateMany({ where: { id, state: "RUNNING", leaseToken: token, leaseUntil: { gt: new Date() } }, data: { state: "DONE", completedAt: new Date(), lastError: null, leaseToken: null, leaseUntil: null } });
     if (!completed.count) return false;
     const job = await tx.job.findUniqueOrThrow({ where: { id } });
-    await tx.receipt.updateMany({ where: { id: job.receiptId, deletedAt: null }, data: patch });
+    await tx.receipt.updateMany({ where: { id: job.receiptId }, data: patch });
     const receipt = await tx.receipt.findUniqueOrThrow({ where: { id: job.receiptId } });
     if (job.kind === "PDF" && receipt.pdfState === "SAVED") await tx.job.updateMany({ where: { receiptId: receipt.id, kind: "ARCHIVE", state: "PENDING" }, data: { enqueuedAt: null, nextRunAt: new Date() } });
     if (job.kind === "METADATA" && expectedVersion !== undefined && receipt.version !== expectedVersion) await tx.job.update({ where: { id }, data: { state: "PENDING", attempts: 0, enqueuedAt: null, completedAt: null, nextRunAt: new Date() } });
@@ -74,8 +75,8 @@ async function processOcr(job: NonNullable<Awaited<ReturnType<typeof claimJob>>>
   await db().$transaction(async tx => {
     const lock = await tx.job.updateMany({ where: { id: job.id, state: "RUNNING", leaseToken: job.leaseToken, leaseUntil: { gt: new Date() } }, data: { updatedAt: new Date() } });
     if (!lock.count) throw new Error("LOST_LEASE");
-    await tx.receipt.updateMany({ where: { id: job.receiptId, deletedAt: null }, data: { extraction: asJson(extraction), extractionVersion: extraction.version } });
-    await tx.receipt.updateMany({ where: { id: job.receiptId, deletedAt: null, userEdited: false }, data: { values: asJson(extraction.values), merchant: extraction.values.merchant, transactionDate: extraction.values.transactionDate, totalYen: extraction.values.totalYen, reviewReasons: extraction.reasons, reviewState: "NEEDS_REVIEW", version: { increment: 1 } } });
+    await tx.receipt.updateMany({ where: { id: job.receiptId }, data: { extraction: asJson(extraction), extractionVersion: extraction.version } });
+    await tx.receipt.updateMany({ where: { id: job.receiptId, userEdited: false }, data: { values: asJson(extraction.values), merchant: extraction.values.merchant, transactionDate: extraction.values.transactionDate, totalYen: extraction.values.totalYen, reviewReasons: extraction.reasons, reviewState: "NEEDS_REVIEW", version: { increment: 1 } } });
   });
   await completeJob(job.id, job.leaseToken!, { ocrState: "DONE", ocrError: null });
 }
@@ -110,7 +111,7 @@ export async function runJob(id: string) {
     await db().$transaction(async tx => {
       const update = await tx.job.updateMany({ where: { id, state: "RUNNING", leaseToken: job.leaseToken }, data: { state: blocked ? "BLOCKED" : terminal ? "FAILED" : "PENDING", nextRunAt, lastError: code, leaseToken: null, leaseUntil: null, enqueuedAt: null } });
       if (!update.count) return;
-      await tx.receipt.updateMany({ where: { id: job.receiptId, deletedAt: null }, data: statusPatch(job.kind, blocked, terminal, code) });
+      await tx.receipt.updateMany({ where: { id: job.receiptId }, data: statusPatch(job.kind, blocked, terminal, code) });
       if (["DRIVE_RECONNECT", "DRIVE_PERMISSION", "DRIVE_FULL"].includes(code)) await tx.driveConnection.updateMany({ where: { userId: job.receipt.userId }, data: { status: code } });
     });
   }
@@ -135,7 +136,7 @@ export async function reconcile() {
   const exhausted = await db().job.findMany({ where: { state: "RUNNING", leaseUntil: { lt: new Date() }, attempts: { gte: setting("MAX_JOB_ATTEMPTS", 5, 20) } }, take: 50 });
   for (const job of exhausted) await db().$transaction(async tx => {
     const changed = await tx.job.updateMany({ where: { id: job.id, state: "RUNNING", leaseToken: job.leaseToken, leaseUntil: { lt: new Date() } }, data: { state: "FAILED", lastError: "WORKER_INTERRUPTED", leaseToken: null, leaseUntil: null } });
-    if (changed.count) await tx.receipt.updateMany({ where: { id: job.receiptId, deletedAt: null }, data: statusPatch(job.kind, false, true, "WORKER_INTERRUPTED") });
+    if (changed.count) await tx.receipt.updateMany({ where: { id: job.receiptId }, data: statusPatch(job.kind, false, true, "WORKER_INTERRUPTED") });
   });
   await db().job.updateMany({ where: { state: "RUNNING", leaseUntil: { lt: new Date() }, attempts: { lt: setting("MAX_JOB_ATTEMPTS", 5, 20) } }, data: { state: "PENDING", leaseToken: null, leaseUntil: null, enqueuedAt: null, nextRunAt: new Date() } });
   await db().job.updateMany({ where: { state: "BLOCKED", lastError: "OCR_LIMIT", nextRunAt: { lte: new Date() } }, data: { state: "PENDING", attempts: 0, enqueuedAt: null } });

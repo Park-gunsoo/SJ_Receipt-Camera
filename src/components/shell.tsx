@@ -2,7 +2,7 @@
 import { useLanguage } from "./language-provider";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Camera, History, UserRound, WifiOff, ArrowUpRight } from "lucide-react";
+import { Camera, History, Trash2, UserRound, WifiOff, ArrowUpRight } from "lucide-react";
 import { useApp } from "./app-provider";
 import { Shiba } from "./shiba";
 import { LanguagePicker } from "./language-picker";
@@ -18,7 +18,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     {!online && <div className="connection-banner" role="status"><WifiOff size={16} />{t("オフライン・未送信の写真は接続後に再送します")}</div>}
     {accountError && <div className="connection-banner warning" role="alert">{t("接続状態を確認できません。もう一度開いてください。")}</div>}
     {account && !account.configured && path !== "/m/start" && <Link href="/m/start" className="setup-banner">{t("接続前プレビュー・写真の送信はまだできません")}<ArrowUpRight size={15} /></Link>}
-    {desktop && <nav className="web-navigation" aria-label={t("メインメニュー")}><Link href="/web/receipts"><History size={17} />{t("レシート管理")}</Link><Link href="/m/capture"><Camera size={17} />{t("撮影画面を見る")}</Link></nav>}
+    {desktop && <nav className="web-navigation" aria-label={t("メインメニュー")}><Link href="/web/receipts" aria-current={path.startsWith("/web/receipts") ? "page" : undefined}><History size={17} />{t("レシート管理")}</Link><Link href="/web/trash" aria-current={path === "/web/trash" ? "page" : undefined}><Trash2 size={17} />{t("ゴミ箱")}</Link><Link href="/m/capture"><Camera size={17} />{t("撮影画面を見る")}</Link></nav>}
     <main className="main-content" key={account?.user?.id ?? "guest"}>{children}</main>
     {!desktop && <nav className="bottom-nav" aria-label={t("メインメニュー")}><Link href="/m/capture" aria-current={path === "/m/capture" ? "page" : undefined}><Camera size={23} /><span>{t("撮影")}</span></Link><Link href="/m/receipts" aria-current={path.startsWith("/m/receipts") ? "page" : undefined}><History size={23} /><span>{t("履歴")}</span></Link></nav>}
   </div>;

@@ -16,6 +16,7 @@ App PDF, optional Drive backup and OCR have separate real status badges. Failed/
 - `/web/receipts`: real owned receipt list, search/date filters and links to each editor. Keep the existing sky-blue Shiba identity and all three display languages. No unrelated dashboard or fabricated statistics.
 - `/web/receipts/[id]`: desktop-first original image on the left, editable extracted fields on the right; responsive single-column layout on smaller screens. Show actual processing status, clear save feedback, server validation and stale-version conflicts. Original OCR evidence remains unchanged. Do not replace a dirty form when polling returns.
 - Mobile detail includes an actual link to the matching web editor and explains that corrections can be made on the web. Navigation must preserve the login destination. Saving edits is an explicit action; simply viewing the page never confirms a receipt.
+- Approved trash flow: web list and detail have a receipt delete action with a confirmation dialog that identifies the receipt and explains file retention/restoration. `/web/trash` is a separate web navigation item, listing deletion time and a restore action. It exposes no original/PDF links or editing while trashed. No mobile delete control, bulk delete, permanent delete or auto-purge. A stale edit/delete/restore cannot overwrite a newer version. A detail screen receiving 404 must stop showing previously loaded receipt fields.
 
 ## Display languages (approved 2026-09-21)
 

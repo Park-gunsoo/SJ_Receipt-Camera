@@ -4,6 +4,8 @@
 
 ## Implemented
 
+- Approved trash/restore (2026-09-21), implementation under verification: delete confirmation in the web list/editor, owner-scoped `/web/trash` and version-checked restore. Reuses `deletedAt` without a DB migration. Original photos, PDFs, Drive files and revisions are retained; normal mobile/web reads hide trash. In-flight processing retains completion/failure results while pending work waits for restore.
+
 - Optional Drive / app PDF change approved and released 2026-09-21: independent private app PDFs, PDF job/state, optional per-account automatic Drive backup for new receipts, and capture/retry without Drive. Additive migration `202609210004_app_pdf` is applied. All four existing receipts now have valid private app PDFs; original checksums, values, versions, manual-edit flags and Drive IDs matched the pre-migration baseline.
 
 - Released (2026-09-21): OCR layout reconstruction, short-year/era/date-weekday checks, mixed-rate tax extraction, automatic capture-to-result navigation, and `/web/receipts` plus version-checked web editing. Uses the existing ReceiptRevision table without an authentication-role change. The subsequent approved storage release makes Drive backup optional.
@@ -17,6 +19,8 @@
 - Test-phase originals are retained without automatic deletion. Android is the first physical-device target.
 
 ## Verified
+
+- Trash checks (2026-09-21): 70 tests passed, including real-SQL owner isolation, optimistic trash/restore transitions, pagination, unchanged originals/values/revisions, paused pending jobs, and in-flight PDF/OCR completion/failure preservation. API tests cover origin/account/input bounds and denied file access. An isolated local UI fixture (explicitly labelled mock, no production DB/Drive access) passed list/detail deletion, cancellation, unsaved-input warning, restore, restored-detail navigation and deleted-detail rejection. Japanese/Korean/English copy and a 390px trash layout were checked; no horizontal overflow or runtime console error was observed in the positive flow. Real production receipts were not deleted for testing.
 
 - App PDF release: 59 automated tests, TypeScript, ESLint and the local production build passed. Added coverage includes Drive-free acceptance, backup-choice idempotence, independent Drive/PDF failures, private PDF ownership, legacy backfill preservation and immutable PDF provenance. Production browser checks confirmed backup OFF survives reload, capture stays enabled, and an existing app PDF opens in Chrome's PDF viewer with backup OFF. The existing user's backup setting was restored to ON after verification. Actual new Android capture with backup OFF remains a physical-device check.
 
