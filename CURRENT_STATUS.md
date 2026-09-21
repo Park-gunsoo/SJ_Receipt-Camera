@@ -4,6 +4,8 @@
 
 ## Implemented
 
+- Optional Drive / app PDF change approved 2026-09-21 and implemented locally: independent private app PDFs, PDF job/state, optional per-account automatic Drive backup for new receipts, and capture/retry without Drive. Migration `202609210004_app_pdf` is additive; legacy originals, edits and Drive IDs are preserved. All 59 tests and the local production build passed; live rollout is in progress.
+
 - Released (2026-09-21): OCR layout reconstruction, short-year/era/date-weekday checks, mixed-rate tax extraction, automatic capture-to-result navigation, and `/web/receipts` plus version-checked web editing. Uses the existing ReceiptRevision table; no DB migration or authentication-role change. Drive behavior is unchanged pending the owner's storage choice.
 
 - Japanese/Korean/English capture/start/history/detail/account pages on mobile and desktop browsers; sky-blue design. Browser language is detected initially, and a shared header selector remembers manual choices per device/browser. The original vector Shiba was replaced with the user's approved illustrated mascot on 2026-09-21; matching history and app-icon variants were generated and saved with provenance/prompts under public/mascot/.

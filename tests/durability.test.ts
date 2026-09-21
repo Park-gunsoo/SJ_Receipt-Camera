@@ -5,8 +5,8 @@ import { PGlite } from "@electric-sql/pglite";
 import { PGLiteSocketServer } from "@electric-sql/pglite-socket";
 import sharp from "sharp";
 
-const mocks = vi.hoisted(() => ({ save: vi.fn(), exists: vi.fn(), read: vi.fn(), info: vi.fn(), archive: vi.fn(), metadata: vi.fn(), dispatch: vi.fn() }));
-vi.mock("@/lib/storage", () => ({ saveImage: mocks.save, imageExists: mocks.exists, readImage: mocks.read, incomingInfo: mocks.info, incomingKey: (key: string) => `${key}.incoming` }));
+const mocks = vi.hoisted(() => ({ save: vi.fn(), exists: vi.fn(), read: vi.fn(), info: vi.fn(), archive: vi.fn(), metadata: vi.fn(), dispatch: vi.fn(), pdfExists: vi.fn(), savePdf: vi.fn() }));
+vi.mock("@/lib/storage", () => ({ saveImage: mocks.save, imageExists: mocks.exists, readImage: mocks.read, incomingInfo: mocks.info, incomingKey: (key: string) => `${key}.incoming`, pdfKey: (key: string) => `${key}.pdf`, pdfExists: mocks.pdfExists, savePdf: mocks.savePdf }));
 vi.mock("@/lib/drive", () => ({ archivePdf: mocks.archive, updatePdfMetadata: mocks.metadata }));
 vi.mock("@/lib/queue", () => ({ dispatchPending: mocks.dispatch }));
 import { db } from "../src/lib/db";
@@ -23,15 +23,82 @@ beforeAll(async () => {
   await pg.exec('CREATE ROLE anon; CREATE ROLE authenticated;');
   await pg.exec(await readFile("prisma/migrations/202609210002_private_access/migration.sql", "utf8"));
   await pg.exec(await readFile("prisma/migrations/202609210003_direct_upload/migration.sql", "utf8"));
+  await pg.exec(await readFile("prisma/migrations/202609210004_app_pdf/migration.sql", "utf8"));
   server = new PGLiteSocketServer({ db: pg, port: 5447, host: "127.0.0.1" }); await server.start();
   image = await sharp({ create: { width: 20, height: 40, channels: 3, background: "white" } }).jpeg().toBuffer();
 });
 afterAll(async () => { await db().$disconnect(); await server.stop(); await pg.close(); vi.unstubAllEnvs(); });
 beforeEach(async () => {
-  vi.clearAllMocks(); mocks.save.mockResolvedValue(undefined); mocks.exists.mockResolvedValue(true); mocks.read.mockResolvedValue(image); mocks.info.mockResolvedValue(null); mocks.archive.mockResolvedValue("drive-file"); mocks.dispatch.mockResolvedValue(undefined);
+  vi.clearAllMocks(); mocks.save.mockResolvedValue(undefined); mocks.exists.mockResolvedValue(true); mocks.read.mockResolvedValue(image); mocks.info.mockResolvedValue(null); mocks.archive.mockResolvedValue("drive-file"); mocks.dispatch.mockResolvedValue(undefined); mocks.pdfExists.mockResolvedValue(false); mocks.savePdf.mockResolvedValue(undefined);
   userId = (await db().user.create({ data: { googleSub: randomUUID(), email: `${randomUUID()}@example.test` } })).id;
 });
 describe("durable intake and jobs (real SQL, stubbed cloud boundaries)", () => {
+  it("stores PDF and OCR results without a Drive connection", async () => {
+    const receipt = await intake(userId, randomUUID(), new Date(), image, "image/jpeg");
+    expect(receipt.archiveState).toBe("NOT_REQUESTED");
+    await db().receipt.update({ where: { id: receipt.id }, data: { rawOcr: { text: "合計 1100円" } } });
+    const jobs = await db().job.findMany({ where: { receiptId: receipt.id } });
+    expect(jobs.map(job => job.kind).sort()).toEqual(["OCR", "PDF"]);
+    await runJob(jobs.find(job => job.kind === "PDF")!.id); await runJob(jobs.find(job => job.kind === "OCR")!.id);
+    const saved = await ownedReceipt(userId, receipt.id);
+    expect(saved.pdfState).toBe("SAVED"); expect(saved.ocrState).toBe("DONE"); expect(saved.archiveState).toBe("NOT_REQUESTED");
+    expect(mocks.savePdf.mock.calls[0][1].subarray(0, 5).toString()).toBe("%PDF-");
+    expect(mocks.archive).not.toHaveBeenCalled();
+  });
+  it("snapshots the optional backup choice once, while later captures use the new setting", async () => {
+    await db().driveConnection.create({ data: { userId, encryptedRefreshToken: "unit-test-only", backupEnabled: false } });
+    const captureId = randomUUID(); const first = await intake(userId, captureId, new Date(), image, "image/jpeg");
+    await db().driveConnection.update({ where: { userId }, data: { backupEnabled: true } });
+    const repeated = await intake(userId, captureId, new Date(), image, "image/jpeg");
+    expect(repeated.archiveState).toBe("NOT_REQUESTED");
+    expect(await db().job.count({ where: { receiptId: first.id, kind: "ARCHIVE" } })).toBe(0);
+    const next = await intake(userId, randomUUID(), new Date(), image, "image/jpeg");
+    expect(next.archiveState).toBe("PENDING"); expect(await db().job.count({ where: { receiptId: next.id } })).toBe(3);
+  });
+  it("waits for the app PDF before attempting a Drive backup", async () => {
+    await db().driveConnection.create({ data: { userId, encryptedRefreshToken: "unit-test-only" } });
+    const receipt = await intake(userId, randomUUID(), new Date(), image, "image/jpeg");
+    const archive = await db().job.findFirstOrThrow({ where: { receiptId: receipt.id, kind: "ARCHIVE" } });
+    const pdf = await db().job.findFirstOrThrow({ where: { receiptId: receipt.id, kind: "PDF" } });
+    expect(await claimJob(archive.id)).toBeNull();
+    expect((await db().job.findUniqueOrThrow({ where: { id: archive.id } })).attempts).toBe(0);
+    await runJob(pdf.id); await runJob(archive.id);
+    expect(mocks.read).toHaveBeenCalledWith(`${receipt.objectKey}.pdf`);
+    expect((await ownedReceipt(userId, receipt.id)).archiveState).toBe("SAVED");
+  });
+  it("keeps the app PDF and OCR available when Drive is full", async () => {
+    await db().driveConnection.create({ data: { userId, encryptedRefreshToken: "unit-test-only" } });
+    const receipt = await intake(userId, randomUUID(), new Date(), image, "image/jpeg");
+    await db().receipt.update({ where: { id: receipt.id }, data: { rawOcr: { text: "合計 1100円" } } });
+    mocks.archive.mockRejectedValue({ response: { status: 403, data: { error: { errors: [{ reason: "storageQuotaExceeded" }] } } } });
+    const jobs = await db().job.findMany({ where: { receiptId: receipt.id } });
+    for (const kind of ["PDF", "ARCHIVE", "OCR"] as const) await runJob(jobs.find(job => job.kind === kind)!.id);
+    const saved = await ownedReceipt(userId, receipt.id);
+    expect(saved.pdfState).toBe("SAVED"); expect(saved.ocrState).toBe("DONE"); expect(saved.archiveState).toBe("BLOCKED"); expect(saved.archiveError).toBe("DRIVE_FULL");
+  });
+  it("recovers a lost PDF storage response without writing a second object", async () => {
+    const receipt = await intake(userId, randomUUID(), new Date(), image, "image/jpeg");
+    const job = await db().job.findFirstOrThrow({ where: { receiptId: receipt.id, kind: "PDF" } });
+    mocks.savePdf.mockRejectedValueOnce(new Error("response lost after durable write"));
+    await runJob(job.id);
+    expect((await ownedReceipt(userId, receipt.id)).pdfState).toBe("PENDING");
+    mocks.pdfExists.mockResolvedValue(true);
+    await db().job.update({ where: { id: job.id }, data: { nextRunAt: new Date(0) } });
+    await runJob(job.id);
+    expect(mocks.savePdf).toHaveBeenCalledTimes(1); expect((await ownedReceipt(userId, receipt.id)).pdfState).toBe("SAVED");
+  });
+  it("backfills a legacy app PDF without replacing its Drive ID or human edits", async () => {
+    const receipt = await intake(userId, randomUUID(), new Date(), image, "image/jpeg");
+    const driveId = randomUUID();
+    await db().receipt.update({ where: { id: receipt.id }, data: { archiveState: "SAVED", driveFileId: driveId, userEdited: true, totalYen: 55, version: 2 } });
+    await db().job.deleteMany({ where: { receiptId: receipt.id, kind: "PDF" } });
+    await reconcile();
+    const pdf = await db().job.findFirstOrThrow({ where: { receiptId: receipt.id, kind: "PDF" } });
+    await runJob(pdf.id);
+    const saved = await ownedReceipt(userId, receipt.id);
+    expect(saved.pdfState).toBe("SAVED"); expect(saved.driveFileId).toBe(driveId); expect(saved.totalYen).toBe(55); expect(saved.version).toBe(2); expect(saved.userEdited).toBe(true);
+    expect(mocks.archive).not.toHaveBeenCalled(); expect(mocks.metadata).not.toHaveBeenCalled();
+  });
   it("saves owned edits and revision atomically, rejecting stale or different-owner writes", async () => {
     const receipt = await intake(userId, randomUUID(), new Date(), image, "image/jpeg");
     await db().receipt.update({ where: { id: receipt.id }, data: { ocrState: "DONE", rawOcr: { text: "private original evidence" } } });
@@ -127,19 +194,20 @@ describe("durable intake and jobs (real SQL, stubbed cloud boundaries)", () => {
   });
   it("claims once and rejects completion from a stale worker after restart", async () => {
     const receipt = await intake(userId, randomUUID(), new Date(), image, "image/jpeg");
-    const job = await db().job.findFirstOrThrow({ where: { receiptId: receipt.id, kind: "ARCHIVE" } });
+    const job = await db().job.findFirstOrThrow({ where: { receiptId: receipt.id, kind: "PDF" } });
     const [a, b] = await Promise.all([claimJob(job.id), claimJob(job.id)]); const first = a ?? b;
     expect([a, b].filter(Boolean)).toHaveLength(1);
     await db().job.update({ where: { id: job.id }, data: { leaseUntil: new Date(Date.now() - 1000) } });
     await reconcile(); const next = await claimJob(job.id); expect(next?.leaseToken).not.toBe(first?.leaseToken);
-    expect(await completeJob(job.id, first!.leaseToken!, { archiveState: "SAVED" })).toBe(false);
-    expect(await completeJob(job.id, next!.leaseToken!, { archiveState: "SAVED" })).toBe(true);
+    expect(await completeJob(job.id, first!.leaseToken!, { pdfState: "SAVED" })).toBe(false);
+    expect(await completeJob(job.id, next!.leaseToken!, { pdfState: "SAVED" })).toBe(true);
   });
   it("archives even when OCR cannot read text", async () => {
+    await db().driveConnection.create({ data: { userId, encryptedRefreshToken: "unit-test-only" } });
     const receipt = await intake(userId, randomUUID(), new Date(), image, "image/jpeg");
     await db().receipt.update({ where: { id: receipt.id }, data: { rawOcr: { text: "", pages: [] } } });
     const jobs = await db().job.findMany({ where: { receiptId: receipt.id } });
-    await runJob(jobs.find(j => j.kind === "OCR")!.id); await runJob(jobs.find(j => j.kind === "ARCHIVE")!.id);
+    await runJob(jobs.find(j => j.kind === "OCR")!.id); await runJob(jobs.find(j => j.kind === "PDF")!.id); await runJob(jobs.find(j => j.kind === "ARCHIVE")!.id);
     const result = await db().receipt.findUniqueOrThrow({ where: { id: receipt.id } }); expect(result.ocrState).toBe("FAILED"); expect(result.archiveState).toBe("SAVED");
   });
   it("preserves a user's edited values during subsequent OCR", async () => {

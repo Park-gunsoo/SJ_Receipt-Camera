@@ -4,7 +4,7 @@ import { captureKey, deletePending, listPending, putPending, type PendingCapture
 import type { ReceiptView } from "@/lib/contracts";
 import { uploadCapture } from "@/lib/upload-client";
 
-type Account = { configured: boolean; loginReady: boolean; user: { id: string; name: string | null; email: string } | null; drive: { status: string; folderUrl: string | null } | null };
+type Account = { configured: boolean; loginReady: boolean; user: { id: string; name: string | null; email: string } | null; drive: { status: string; backupEnabled: boolean; folderUrl: string | null } | null };
 export type CaptureProgress = { captureId: string; phase: "sending" | "accepted" | "pending"; receipt?: ReceiptView; error?: string; localSaved?: boolean; elapsedMs?: number };
 type AppContext = { account: Account | null; accountError: boolean; pendingCount: number; online: boolean; latest: CaptureProgress | null; refresh: () => Promise<void>; capture: (blob: Blob) => string; retry: () => Promise<void> };
 const Context = createContext<AppContext | null>(null);
@@ -53,7 +53,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [refreshCount]);
   const retry = useCallback(async () => {
     const owner = current.current?.user?.id;
-    if (!owner || !navigator.onLine || current.current?.drive?.status !== "CONNECTED") return;
+    if (!owner || !navigator.onLine || !current.current?.configured) return;
     try { for (const item of await listPending(owner)) { if (current.current?.user?.id !== owner) break; await upload(item); } } catch { /* Local-storage errors are surfaced on capture. */ }
   }, [upload]);
   const capture = useCallback((blob: Blob) => {

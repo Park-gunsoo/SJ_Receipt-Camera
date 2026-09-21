@@ -4,6 +4,23 @@ import { googleCloudOptions } from "./google-cloud";
 let client: Storage | undefined;
 function bucket() { client ??= new Storage(googleCloudOptions()); return client.bucket(env("GCS_BUCKET")); }
 export const incomingKey = (key: string) => `${key}.incoming`;
+export const pdfKey = (key: string) => `${key}.pdf`;
+export async function pdfExists(key: string, sourceChecksum: string) {
+  try {
+    const [metadata] = await bucket().file(pdfKey(key)).getMetadata();
+    if (metadata.contentType !== "application/pdf" || metadata.metadata?.sourceSha256 !== sourceChecksum || Number(metadata.size) < 5) throw new Error("PDF_OBJECT_CONFLICT");
+    return true;
+  } catch (error) { if ((error as { code?: number }).code === 404) return false; throw error; }
+}
+export async function savePdf(key: string, bytes: Buffer, sourceChecksum: string) {
+  try {
+    await bucket().file(pdfKey(key)).save(bytes, { resumable: false, validation: "crc32c", preconditionOpts: { ifGenerationMatch: 0 }, metadata: { contentType: "application/pdf", cacheControl: "private, no-store", contentDisposition: 'inline; filename="receipt.pdf"', metadata: { sourceSha256: sourceChecksum } } });
+  } catch (error) {
+    if ((error as { code?: number }).code !== 412) throw error;
+    // Concurrent retries may produce different PDF timestamps for the same immutable source.
+    if (!await pdfExists(key, sourceChecksum)) throw new Error("PDF_OBJECT_CONFLICT");
+  }
+}
 export async function uploadPolicy(key: string, mimeType: string, checksum: string, byteLength: number) {
   // Browser may write only a bounded staging object, never the accepted original.
   const [policy] = await bucket().file(incomingKey(key)).generateSignedPostPolicyV4({

@@ -23,6 +23,7 @@ export type ReceiptView = {
   version: number; userEdited: boolean;
   id: string; captureId: string; capturedAt: string; createdAt: string; acceptedAt: string | null;
   intakeState: string; archiveState: string; ocrState: string; reviewState: string;
+  pdfState: string; pdfError: string | null;
   merchant: string | null; transactionDate: string | null; totalYen: number | null;
   values: ReceiptValues | null; reviewReasons: string[]; archiveError: string | null; ocrError: string | null;
   driveUrl: string | null;

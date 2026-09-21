@@ -9,7 +9,7 @@ let tasks: CloudTasksClient | undefined;
 export async function dispatchPending(receiptId?: string) {
   tasks ??= new CloudTasksClient(googleCloudOptions());
   const stale = new Date(Date.now() - 15 * 60000);
-  const eligible = { state: "PENDING" as const, nextRunAt: { lte: new Date() }, OR: [{ enqueuedAt: null }, { enqueuedAt: { lt: stale } }], ...(receiptId ? { receiptId } : {}) };
+  const eligible = { state: "PENDING" as const, nextRunAt: { lte: new Date() }, AND: [{ OR: [{ enqueuedAt: null }, { enqueuedAt: { lt: stale } }] }, { OR: [{ kind: { not: "ARCHIVE" as const } }, { receipt: { pdfState: "SAVED" as const } }] }], ...(receiptId ? { receiptId } : {}) };
   const jobs = await db().job.findMany({ where: eligible, select: { id: true }, take: 40, orderBy: { nextRunAt: "asc" } });
   for (const job of jobs) {
     const claimed = await db().job.updateMany({ where: { id: job.id, ...eligible }, data: { enqueuedAt: new Date() } });

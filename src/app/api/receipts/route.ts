@@ -20,8 +20,6 @@ export async function POST(request: Request) {
     const file = form.get("image");
     if (!input.success || !(file instanceof File) || !file.size) throw new AppError("INVALID_UPLOAD");
     if (file.size > max) throw new AppError("FILE_TOO_LARGE", 413);
-    const existing = await db().receipt.findUnique({ where: { userId_captureId: { userId: user.id, captureId: input.data.captureId } }, select: { intakeState: true } });
-    if (existing?.intakeState !== "ACCEPTED" && (!user.drive || user.drive.status !== "CONNECTED")) throw new AppError("DRIVE_RECONNECT", 409);
     const receipt = await intake(user.id, input.data.captureId, new Date(input.data.capturedAt), Buffer.from(await file.arrayBuffer()), file.type);
     // Durable jobs exist already. Scheduler can dispatch if this request ends here.
     // Do not wait for Google queue/OCR/Drive on the receipt acceptance response.

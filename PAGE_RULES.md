@@ -1,12 +1,14 @@
 # Mobile pages
 
-- `/m/start`: localized introduction, Google login, separate Drive connection, honest unavailable/configuration state.
+- `/m/start`: localized introduction and Google login; capture is available without Drive. Drive backup is clearly optional and configured on the account page.
 - `/m/capture`: primary route; rear camera, receipt guide, shutter, album alternative; actual captured image overlay, true send/accepted/OCR/archive states, next-shot link.
 - `/m/receipts`: real records, merchant/date filters, thumbnail, amount and processing states; empty/error/offline are distinct.
 - `/m/receipts/[id]`: zoomable image, private PDF, extracted fields, evidence/review reasons, Drive link. No edit/delete/confirmation controls.
-- `/m/account`: identity, Drive status/folder, reconnect, logout with pending count, install and privacy information.
+- `/m/account`: identity, private app storage information, optional Drive connection/automatic-backup toggle, actual backup folder, reconnect, logout with pending count, install and privacy information. The toggle applies to newly accepted receipts; existing files and accepted work remain intact.
 
 Bottom navigation has 撮影 and 履歴 only. Account in header. Configuration preview may show the actual empty UI but must disable intake and never invent records or successful integration.
+
+App PDF, optional Drive backup and OCR have separate real status badges. Failed/disconnected Drive cannot disable capture, local retries, app PDF viewing or the editor. Existing connected users keep their previous automatic backup choice; unconnected users need only Google sign-in. All related text supports the same three display languages.
 
 ## Capture results and web editing (requested 2026-09-21)
 

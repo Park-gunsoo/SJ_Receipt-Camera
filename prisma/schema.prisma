@@ -12,10 +12,17 @@ enum IntakeState {
   ACCEPTED
 }
 enum ArchiveState {
+  NOT_REQUESTED
   PENDING
   PROCESSING
   SAVED
   BLOCKED
+  FAILED
+}
+enum PdfState {
+  PENDING
+  PROCESSING
+  SAVED
   FAILED
 }
 enum OcrState {
@@ -31,6 +38,7 @@ enum ReviewState {
   CONFIRMED
 }
 enum JobKind {
+  PDF
   ARCHIVE
   OCR
   METADATA
@@ -60,6 +68,7 @@ model DriveConnection {
   user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   encryptedRefreshToken String
   status                String   @default("CONNECTED")
+  backupEnabled         Boolean  @default(true)
   rootFolderId          String?
   updatedAt             DateTime @updatedAt
 }
@@ -85,6 +94,8 @@ model Receipt {
   intakeState     IntakeState  @default(UPLOADING)
   intakeError     String?
   archiveState    ArchiveState @default(PENDING)
+  pdfState        PdfState     @default(PENDING)
+  pdfError        String?
   ocrState        OcrState     @default(PENDING)
   reviewState     ReviewState  @default(UNREVIEWED)
   objectKey       String       @unique
@@ -112,6 +123,7 @@ model Receipt {
   @@unique([userId, captureId])
   @@index([userId, createdAt, id])
   @@index([intakeState, createdAt])
+  @@index([pdfState, createdAt])
 }
 
 model Job {

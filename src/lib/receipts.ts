@@ -10,8 +10,14 @@ import type { ReceiptValues, ReceiptView } from "./contracts";
 export function jstDay(date = new Date()) { return new Date(date.getTime() + 9 * 60 * 60000).toISOString().slice(0, 10); }
 export async function acceptStoredReceipt(id: string) {
   return db().$transaction(async tx => {
-    const receipt = await tx.receipt.update({ where: { id }, data: { intakeState: "ACCEPTED", intakeError: null, acceptedAt: (await tx.receipt.findUniqueOrThrow({ where: { id } })).acceptedAt ?? new Date() } });
-    for (const kind of ["ARCHIVE", "OCR"] as const) await tx.job.upsert({ where: { receiptId_kind: { receiptId: id, kind } }, create: { receiptId: id, kind }, update: {} });
+    await tx.$queryRaw`SELECT id FROM "Receipt" WHERE id = ${id} FOR UPDATE`;
+    const current = await tx.receipt.findUniqueOrThrow({ where: { id } });
+    if (current.deletedAt) throw new AppError("NOT_FOUND", 404);
+    if (current.intakeState === "ACCEPTED") return current;
+    const drive = await tx.driveConnection.findUnique({ where: { userId: current.userId }, select: { backupEnabled: true } });
+    const receipt = await tx.receipt.update({ where: { id }, data: { intakeState: "ACCEPTED", intakeError: null, acceptedAt: current.acceptedAt ?? new Date(), archiveState: drive?.backupEnabled ? "PENDING" : "NOT_REQUESTED" } });
+    const kinds = drive?.backupEnabled ? ["PDF", "OCR", "ARCHIVE"] as const : ["PDF", "OCR"] as const;
+    for (const kind of kinds) await tx.job.upsert({ where: { receiptId_kind: { receiptId: id, kind } }, create: { receiptId: id, kind }, update: {} });
     return receipt;
   });
 }
@@ -64,7 +70,7 @@ export async function finishUpload(receipt: Receipt): Promise<Receipt | null> {
   return acceptStoredReceipt(receipt.id);
 }
 export function receiptView(receipt: Receipt): ReceiptView {
-  return { version: receipt.version, userEdited: receipt.userEdited, id: receipt.id, captureId: receipt.captureId, capturedAt: receipt.capturedAt.toISOString(), createdAt: receipt.createdAt.toISOString(), acceptedAt: receipt.acceptedAt?.toISOString() ?? null, intakeState: receipt.intakeState, archiveState: receipt.archiveState, ocrState: receipt.ocrState, reviewState: receipt.reviewState, merchant: receipt.merchant, transactionDate: receipt.transactionDate, totalYen: receipt.totalYen, values: receipt.values as ReceiptValues | null, reviewReasons: receipt.reviewReasons, archiveError: receipt.archiveError, ocrError: receipt.ocrError, driveUrl: receipt.archiveState === "SAVED" && receipt.driveFileId ? `https://drive.google.com/file/d/${receipt.driveFileId}/view` : null };
+  return { pdfState: receipt.pdfState, pdfError: receipt.pdfError, version: receipt.version, userEdited: receipt.userEdited, id: receipt.id, captureId: receipt.captureId, capturedAt: receipt.capturedAt.toISOString(), createdAt: receipt.createdAt.toISOString(), acceptedAt: receipt.acceptedAt?.toISOString() ?? null, intakeState: receipt.intakeState, archiveState: receipt.archiveState, ocrState: receipt.ocrState, reviewState: receipt.reviewState, merchant: receipt.merchant, transactionDate: receipt.transactionDate, totalYen: receipt.totalYen, values: receipt.values as ReceiptValues | null, reviewReasons: receipt.reviewReasons, archiveError: receipt.archiveError, ocrError: receipt.ocrError, driveUrl: receipt.archiveState === "SAVED" && receipt.driveFileId ? `https://drive.google.com/file/d/${receipt.driveFileId}/view` : null };
 }
 export async function ownedReceipt(userId: string, id: string) {
   const receipt = await db().receipt.findFirst({ where: { id, userId, deletedAt: null, intakeState: "ACCEPTED" } });

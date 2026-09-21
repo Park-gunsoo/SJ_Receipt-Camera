@@ -3,9 +3,10 @@ import { ImageAnnotatorClient } from "@google-cloud/vision";
 import type { JobKind, Prisma } from "@/generated/prisma/client";
 import { db } from "./db";
 import { setting } from "./config";
-import { readImage } from "./storage";
+import { pdfKey, readImage } from "./storage";
 import { finishUpload, jstDay } from "./receipts";
-import { createPdf, normalizedImage } from "./image";
+import { normalizedImage } from "./image";
+import { ensureAppPdf } from "./app-pdf";
 import { archivePdf, updatePdfMetadata } from "./drive";
 import { extractReceipt } from "./extraction";
 import { googleError } from "./http";
@@ -17,7 +18,7 @@ type ReceiptPatch = Prisma.ReceiptUpdateManyMutationInput;
 const asJson = (data: unknown) => JSON.parse(JSON.stringify(data)) as Prisma.InputJsonValue;
 export async function claimJob(id: string, now = new Date()) {
   const token = randomUUID();
-  const result = await db().job.updateMany({ where: { id, attempts: { lt: setting("MAX_JOB_ATTEMPTS", 5, 20) }, nextRunAt: { lte: now }, OR: [{ state: "PENDING" }, { state: "RUNNING", leaseUntil: { lt: now } }], receipt: { intakeState: "ACCEPTED", deletedAt: null } }, data: { state: "RUNNING", attempts: { increment: 1 }, leaseToken: token, leaseUntil: new Date(now.getTime() + 10 * 60000), enqueuedAt: null } });
+  const result = await db().job.updateMany({ where: { id, attempts: { lt: setting("MAX_JOB_ATTEMPTS", 5, 20) }, nextRunAt: { lte: now }, AND: [{ OR: [{ state: "PENDING" }, { state: "RUNNING", leaseUntil: { lt: now } }] }, { OR: [{ kind: { not: "ARCHIVE" } }, { receipt: { pdfState: "SAVED" } }] }], receipt: { intakeState: "ACCEPTED", deletedAt: null } }, data: { state: "RUNNING", attempts: { increment: 1 }, leaseToken: token, leaseUntil: new Date(now.getTime() + 10 * 60000), enqueuedAt: null } });
   return result.count ? db().job.findUniqueOrThrow({ where: { id }, include: { receipt: true } }) : null;
 }
 async function patchWithLease(id: string, token: string, patch: ReceiptPatch) {
@@ -35,8 +36,9 @@ export async function completeJob(id: string, token: string, patch: ReceiptPatch
     const job = await tx.job.findUniqueOrThrow({ where: { id } });
     await tx.receipt.updateMany({ where: { id: job.receiptId, deletedAt: null }, data: patch });
     const receipt = await tx.receipt.findUniqueOrThrow({ where: { id: job.receiptId } });
+    if (job.kind === "PDF" && receipt.pdfState === "SAVED") await tx.job.updateMany({ where: { receiptId: receipt.id, kind: "ARCHIVE", state: "PENDING" }, data: { enqueuedAt: null, nextRunAt: new Date() } });
     if (job.kind === "METADATA" && expectedVersion !== undefined && receipt.version !== expectedVersion) await tx.job.update({ where: { id }, data: { state: "PENDING", attempts: 0, enqueuedAt: null, completedAt: null, nextRunAt: new Date() } });
-    if (job.kind !== "METADATA" && receipt.archiveState === "SAVED" && receipt.ocrState === "DONE") await requestMetadata(tx, receipt.id);
+    if ((job.kind === "OCR" || job.kind === "ARCHIVE") && receipt.archiveState === "SAVED" && receipt.ocrState === "DONE") await requestMetadata(tx, receipt.id);
     return true;
   });
 }
@@ -78,6 +80,7 @@ async function processOcr(job: NonNullable<Awaited<ReturnType<typeof claimJob>>>
   await completeJob(job.id, job.leaseToken!, { ocrState: "DONE", ocrError: null });
 }
 function statusPatch(kind: JobKind, blocked: boolean, terminal: boolean, error: string): ReceiptPatch {
+  if (kind === "PDF") return { pdfState: terminal ? "FAILED" : "PENDING", pdfError: error };
   if (kind === "ARCHIVE") return { archiveState: blocked ? "BLOCKED" : terminal ? "FAILED" : "PENDING", archiveError: error };
   if (kind === "OCR") return { ocrState: error === "OCR_LIMIT" ? "LIMIT_REACHED" : terminal ? "FAILED" : "PENDING", ocrError: error, reviewState: "NEEDS_REVIEW" };
   return { archiveError: error };
@@ -86,9 +89,13 @@ export async function runJob(id: string) {
   const job = await claimJob(id);
   if (!job) return { skipped: true };
   try {
-    if (job.kind === "ARCHIVE") {
+    if (job.kind === "PDF") {
+      await patchWithLease(job.id, job.leaseToken!, { pdfState: "PROCESSING", pdfError: null });
+      await ensureAppPdf(job.receipt);
+      await completeJob(job.id, job.leaseToken!, { pdfState: "SAVED", pdfError: null });
+    } else if (job.kind === "ARCHIVE") {
       await patchWithLease(job.id, job.leaseToken!, { archiveState: "PROCESSING", archiveError: null });
-      const pdf = await createPdf(await readImage(job.receipt.objectKey), job.receipt.mimeType);
+      const pdf = await readImage(pdfKey(job.receipt.objectKey));
       await archivePdf(job.receiptId, pdf);
       await completeJob(job.id, job.leaseToken!, { archiveState: "SAVED", archiveError: null });
     } else if (job.kind === "OCR") await processOcr(job);
@@ -96,7 +103,7 @@ export async function runJob(id: string) {
   } catch (error) {
     if ((error as Error).message === "LOST_LEASE") return { skipped: true };
     const explicit = ["OCR_LIMIT", "OCR_EMPTY", "DRIVE_RECONNECT", "DRIVE_FILE_TRASHED"].includes((error as Error).message) ? (error as Error).message : null;
-    const code = explicit ?? (job.kind === "OCR" ? "OCR_ERROR" : googleError(error));
+    const code = job.kind === "PDF" ? "PDF_ERROR" : explicit ?? (job.kind === "OCR" ? "OCR_ERROR" : googleError(error));
     const blocked = ["DRIVE_RECONNECT", "DRIVE_PERMISSION", "DRIVE_FULL", "DRIVE_FILE_TRASHED", "OCR_LIMIT"].includes(code);
     const terminal = job.attempts >= setting("MAX_JOB_ATTEMPTS", 5, 20) || code === "OCR_EMPTY";
     const nextRunAt = code === "OCR_LIMIT" ? new Date(new Date(`${jstDay()}T00:00:00+09:00`).getTime() + 86400000) : new Date(Date.now() + Math.min(3600, 30 * 2 ** job.attempts) * 1000);
@@ -107,6 +114,7 @@ export async function runJob(id: string) {
       if (["DRIVE_RECONNECT", "DRIVE_PERMISSION", "DRIVE_FULL"].includes(code)) await tx.driveConnection.updateMany({ where: { userId: job.receipt.userId }, data: { status: code } });
     });
   }
+  await dispatchPending(job.receiptId);
   return { processed: true };
 }
 export async function reconcile() {
@@ -121,6 +129,9 @@ export async function reconcile() {
       await db().receipt.update({ where: { id: receipt.id }, data: { updatedAt: new Date() } });
     }
   }
+  // Backfill legacy receipts and recover a missing PDF outbox entry without touching OCR or Drive files.
+  const missingPdfs = await db().receipt.findMany({ where: { intakeState: "ACCEPTED", deletedAt: null, pdfState: { not: "SAVED" }, jobs: { none: { kind: "PDF" } } }, select: { id: true }, orderBy: { createdAt: "asc" }, take: 20 });
+  for (const receipt of missingPdfs) await db().job.upsert({ where: { receiptId_kind: { receiptId: receipt.id, kind: "PDF" } }, create: { receiptId: receipt.id, kind: "PDF" }, update: {} });
   const exhausted = await db().job.findMany({ where: { state: "RUNNING", leaseUntil: { lt: new Date() }, attempts: { gte: setting("MAX_JOB_ATTEMPTS", 5, 20) } }, take: 50 });
   for (const job of exhausted) await db().$transaction(async tx => {
     const changed = await tx.job.updateMany({ where: { id: job.id, state: "RUNNING", leaseToken: job.leaseToken, leaseUntil: { lt: new Date() } }, data: { state: "FAILED", lastError: "WORKER_INTERRUPTED", leaseToken: null, leaseUntil: null } });

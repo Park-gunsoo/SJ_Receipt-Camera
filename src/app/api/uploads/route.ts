@@ -33,7 +33,6 @@ export async function POST(request: Request) {
       completed = null;
     }
     if (completed) { after(() => dispatchPending(completed.id)); return json({ receipt: receiptView(completed) }); }
-    if (!user.drive || user.drive.status !== "CONNECTED") throw new AppError("DRIVE_RECONNECT", 409);
     return json({ receiptId: receipt.id, upload: await uploadPolicy(receipt.objectKey, mimeType, checksum, byteLength) });
   } catch (error) { return apiError(error); }
 }

@@ -27,10 +27,9 @@ export function CaptureScreen() {
   const [preview, setPreview] = useState<{ url: string; captureId: string } | null>(null);
   const [polled, setPolled] = useState<ReceiptView | null>(null);
   const previewRef = useRef<string | null>(null);
-  const ready = !!(account?.configured && account.user && account.drive?.status === "CONNECTED");
+  const ready = !!(account?.configured && account.user);
   const receipt = polled?.id === latest?.receipt?.id ? polled : latest?.receipt;
   const active = !!preview && latest?.captureId === preview.captureId;
-  const terminal = receipt && ["DONE", "FAILED", "LIMIT_REACHED"].includes(receipt.ocrState) && ["SAVED", "FAILED", "BLOCKED"].includes(receipt.archiveState);
   const scanning = active && (latest?.phase === "sending" || (latest?.phase === "accepted" && !!receipt && ["PENDING", "PROCESSING"].includes(receipt.ocrState)));
   useEffect(() => {
     if (active && latest?.phase === "accepted" && receipt?.ocrState === "DONE") router.replace(`/m/receipts/${receipt.id}`);
@@ -90,26 +89,26 @@ export function CaptureScreen() {
     try { await stream.current?.getVideoTracks()[0].applyConstraints({ advanced: [{ torch: !torch } as MediaTrackConstraintSet] }); setTorch(!torch); } catch { setError("TORCH_UNAVAILABLE"); }
   };
   return <section className="capture-page">
-    <div className="page-heading"><div><p className="eyebrow">{t("SCAN & SAVE")}</p><h1>{t("レシートを撮影")}</h1></div><span className={`connection-pill ${ready ? "connected" : ""}`}><span />{ready ? t("Drive 接続済み") : t("未接続")}</span></div>
+    <div className="page-heading"><div><p className="eyebrow">{t("SCAN & SAVE")}</p><h1>{t("レシートを撮影")}</h1></div><span className={`connection-pill ${ready ? "connected" : ""}`}><span />{ready ? t("撮影できます") : t("未接続")}</span></div>
     <p className="page-lead">{t("レシートを枠に合わせて、パシャッ。")}</p>
     <div className={`camera-window ${cameraOpen || preview ? "has-media" : ""}`}>
       <video ref={video} playsInline muted className={cameraOpen && !preview ? "camera-video" : "camera-video hidden"} aria-label={t("カメラのプレビュー")} />
       {!cameraOpen && !preview && <div className="camera-placeholder"><span className="camera-orbit"><ScanLine size={38} strokeWidth={1.2} /></span><strong>{t("ここにレシートを")}</strong><span>{t("全体が入るように撮影してください")}</span>{ready ? <button className="camera-open-button" onClick={openCamera} disabled={opening}><Camera size={18} />{opening ? t("カメラを起動中…") : t("カメラを開く")}</button> : <Link href="/m/start" className="camera-open-button"><Camera size={18} />{t("接続してはじめる")}</Link>}</div>}
       {!preview && <div className="receipt-guide" aria-hidden="true"><i /><i /><i /><i /></div>}
-      {preview && <><img className="captured-image" src={preview.url} alt={t("今撮影したレシート")} />{scanning && <div className="scan-line" aria-hidden="true" />}<div className="scan-label" role="status">{active && latest?.phase === "sending" ? <><CloudUpload size={16} />{t("送信中…")}</> : active && latest?.phase === "pending" ? t("未送信") : terminal ? <><Check size={16} />{t("処理状況を更新しました")}</> : receipt && ["DONE", "FAILED", "LIMIT_REACHED"].includes(receipt.ocrState) ? t("PDFを保存中…") : t("読み取り中…")}</div></>}
+      {preview && <><img className="captured-image" src={preview.url} alt={t("今撮影したレシート")} />{scanning && <div className="scan-line" aria-hidden="true" />}<div className="scan-label" role="status">{active && latest?.phase === "sending" ? <><CloudUpload size={16} />{t("送信中…")}</> : active && latest?.phase === "pending" ? t("未送信") : receipt?.ocrState === "DONE" ? t("結果を開いています…") : receipt && ["FAILED", "LIMIT_REACHED"].includes(receipt.ocrState) ? t("読み取りの確認が必要です") : t("読み取り中…")}</div></>}
       <span className="camera-corner-label">{preview ? t("撮影した写真") : t("1枚ずつ・全体を枠の中に")}</span>
       {canTorch && !preview && <button className="torch-button" onClick={toggleTorch} aria-label={torch ? t("ライトを消す") : t("ライトをつける")}>{torch ? <Zap size={20} /> : <ZapOff size={20} />}</button>}
     </div>
     {error && <div className="notice caution" role="alert">{errorMessage(error, locale)}</div>}
     {preview ? <div className="capture-result" aria-live="polite">
-      {active && latest?.phase === "accepted" && <><div className="accepted-title"><Check size={18} />{t("受付完了")}</div><p>{t("分析が完了すると、結果画面に移動します。")} {t("PDF・Driveの保存は引き続き処理されます。")}</p>{receipt && <><Status receipt={receipt} />{receipt.ocrState === "DONE" && <p>{receipt.merchant ?? t("店舗名 未確認")} · {yen(receipt.totalYen, locale)}</p>}</>}</>}
+      {active && latest?.phase === "accepted" && <><div className="accepted-title"><Check size={18} />{t("受付完了")}</div><p>{t("分析が完了すると、結果画面に移動します。")} {t("PDFの保存は続きます。Driveへのバックアップは選択した場合のみ行います。")}</p>{receipt && <><Status receipt={receipt} />{receipt.ocrState === "DONE" && <p>{receipt.merchant ?? t("店舗名 未確認")} · {yen(receipt.totalYen, locale)}</p>}</>}</>}
       {active && latest?.phase === "sending" && <><strong>{t("写真を送信しています…")}</strong><p>{t("受付完了まで、この画面を開いたままお待ちください。")}</p></>}
       {active && latest?.phase === "pending" && <><strong>{t("まだ送信されていません")}</strong><p>{latest.localSaved ? errorMessage(latest.error ?? "OFFLINE", locale) : t("端末にも保存できていません。画面を閉じる前に下の写真を保存してください。")}</p>{!latest.localSaved && <a className="text-link" href={preview.url} download="receipt.jpg">{t("この写真を端末に保存")}</a>}</>}
       {active && latest?.phase === "sending" && latest.localSaved === false && <p className="notice caution">{errorMessage("LOCAL_STORAGE", locale)}</p>}
       <div className="two-actions"><button className="button primary" onClick={nextShot}><Camera size={18} />{t("次を撮る")}</button><Link className="button secondary" href={receipt ? `/m/receipts/${receipt.id}` : "/m/receipts"}>{t("履歴を見る")}<ArrowRight size={16} /></Link></div>
     </div> : <div className="capture-controls"><button className="album-button" onClick={() => fileInput.current?.click()} disabled={!ready}><ImagePlus size={23} /><span>{t("写真から")}</span></button><button className="shutter-button" onClick={cameraOpen ? shoot : openCamera} disabled={!ready || opening} aria-label={cameraOpen ? t("レシートを撮影する") : t("カメラを開く")}><span><Camera size={27} strokeWidth={1.7} /></span></button><div className="shutter-caption">{t("撮影すると")}<br />{t("自動で送信")}</div></div>}
     <input ref={fileInput} type="file" accept="image/jpeg,image/png,image/webp" className="visually-hidden" aria-label={t("レシート画像を選択")} onChange={event => { const file = event.target.files?.[0]; if (file) receiveImage(file); event.target.value = ""; }} />
-    <div className="helper-card"><Shiba className="helper-shiba" /><div><strong>{t("あとは、おまかせ。")}</strong><p>{t("撮ったレシートはPDFにして")}<br />{t("あなたのGoogle Driveへ。")}</p><span><ShieldCheck size={13} />{t("あなただけの非公開フォルダに保存")}</span></div></div>
+    <div className="helper-card"><Shiba className="helper-shiba" /><div><strong>{t("あとは、おまかせ。")}</strong><p>{t("撮ったレシートはPDFにして")}<br />{t("アプリに安全に保管。")}</p><span><ShieldCheck size={13} />{t("あなただけの非公開フォルダに保存")}</span></div></div>
     <div className="queue-row"><span className={`tiny-dot ${online ? "green" : ""}`} /><span>{pendingCount ? t("未送信 {count}件", { count: pendingCount }) : online ? t("未送信の写真はありません") : t("インターネット接続を待っています")}</span>{pendingCount > 0 && <button onClick={retry} className="text-link"><RotateCcw size={14} />{t("再送")}</button>}</div>
   </section>;
 }

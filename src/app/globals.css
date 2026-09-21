@@ -181,5 +181,8 @@ html:lang(en) body { font-family:system-ui,-apple-system,"Segoe UI",sans-serif; 
 .editor-review { font-size:12px; color:var(--muted); margin-top:12px; }
 .editor-review summary { cursor:pointer; min-height:44px; }
 .web-edit-link { margin-top:20px; text-align:center; }
+.backup-toggle { display:flex; align-items:center; gap:12px; min-height:60px; padding:12px; border:1px solid var(--line); border-radius:12px; background:var(--bg); cursor:pointer; font-size:13px; }
+.backup-toggle input { width:22px; height:22px; flex:none; accent-color:var(--sky-strong); }
+.backup-toggle small { display:block; color:var(--muted); margin-top:5px; font-size:11px; }
 @media(max-width:850px) { .editor-grid { grid-template-columns:1fr; }.editor-original { position:static; }.editor-image-scroll { height:420px; }.web-page-heading { flex-wrap:wrap; }.web-page-heading .status-pair { padding-top:0; } }
 @media(max-width:480px) { .web-frame .main-content { padding:22px 16px 30px; }.web-navigation { padding:0 20px; }.editor-savebar { flex-wrap:wrap; }.editor-savebar .button { width:100%; }.editor-fields { column-gap:10px; }.tax-edit-row { gap:5px; grid-template-columns:48px minmax(58px,1fr) minmax(58px,1fr) 48px; }.editor-original { padding:14px; } }

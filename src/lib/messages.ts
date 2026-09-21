@@ -1,17 +1,20 @@
 import { displayText, type Locale } from "./i18n";
 export function errorMessage(code: string, locale: Locale = "ja") {
   const messages: Record<string, string> = {
+    SETTINGS_FAILED: "設定を保存できませんでした。もう一度お試しください。",
+    PDF_ERROR: "PDFを保存できませんでした。原本写真は保持しています。状態を確認してください。",
+    PDF_PENDING: "PDFの作成がまだ完了していません。しばらくしてからもう一度開いてください。",
     EDIT_CONFLICT: "別の更新があります。入力内容は保持しています。最新の内容を確認してから保存してください。",
     INVALID_INPUT: "入力内容を確認してください。日付・金額・登録番号の形式が正しくありません。",
     SAVE_FAILED: "保存できませんでした。入力内容は保持しています。接続を確認して再試行してください。",
     ANALYSIS_PENDING: "読み取り中…",
     CAMERA_UNAVAILABLE: "カメラを開けませんでした。ブラウザの権限を確認するか、写真から読み込んでください。",
-    CONNECTION_REQUIRED: "先にGoogleとDriveを接続してください。",
+    CONNECTION_REQUIRED: "先にGoogleにログインしてください。",
     CAPTURE_FAILED: "撮影できませんでした。もう一度お試しください。",
     TORCH_UNAVAILABLE: "この端末ではライトを切り替えられません。",
     UNAUTHORIZED: "ログインし直してください。未送信の写真は、このアカウントで再開できます。",
     ACCOUNT_CHANGED: "アカウントが切り替わりました。元のアカウントで再開してください。",
-    DRIVE_RECONNECT: "Google Driveを再接続してください。写真は未送信のまま保持します。",
+    DRIVE_RECONNECT: "Driveバックアップには再接続が必要です。アプリ内保存は引き続き利用できます。",
     DRIVE_PERMISSION: "Google Driveのアクセス権を確認してください。",
     DRIVE_FULL: "Google Driveの空き容量を確認してください。",
     DRIVE_FILE_TRASHED: "保存先のファイルまたはフォルダをGoogle Driveで確認してください。",
