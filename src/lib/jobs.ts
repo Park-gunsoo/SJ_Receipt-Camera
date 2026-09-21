@@ -108,7 +108,7 @@ export async function runJob(id: string) {
   return { processed: true };
 }
 export async function reconcile() {
-  const uploads = await db().receipt.findMany({ where: { intakeState: "UPLOADING", intakeError: null, deletedAt: null }, orderBy: { updatedAt: "asc" }, take: 50 });
+  const uploads = await db().receipt.findMany({ where: { intakeState: "UPLOADING", deletedAt: null }, orderBy: { updatedAt: "asc" }, take: 50 });
   let recovered = 0;
   for (const receipt of uploads) {
     try {

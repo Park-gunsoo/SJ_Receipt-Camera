@@ -5,8 +5,8 @@ import { PGlite } from "@electric-sql/pglite";
 import { PGLiteSocketServer } from "@electric-sql/pglite-socket";
 import sharp from "sharp";
 
-const mocks = vi.hoisted(() => ({ save: vi.fn(), exists: vi.fn(), read: vi.fn(), archive: vi.fn(), metadata: vi.fn(), dispatch: vi.fn() }));
-vi.mock("@/lib/storage", () => ({ saveImage: mocks.save, imageExists: mocks.exists, readImage: mocks.read, incomingKey: (key: string) => `${key}.incoming` }));
+const mocks = vi.hoisted(() => ({ save: vi.fn(), exists: vi.fn(), read: vi.fn(), info: vi.fn(), archive: vi.fn(), metadata: vi.fn(), dispatch: vi.fn() }));
+vi.mock("@/lib/storage", () => ({ saveImage: mocks.save, imageExists: mocks.exists, readImage: mocks.read, incomingInfo: mocks.info, incomingKey: (key: string) => `${key}.incoming` }));
 vi.mock("@/lib/drive", () => ({ archivePdf: mocks.archive, updatePdfMetadata: mocks.metadata }));
 vi.mock("@/lib/queue", () => ({ dispatchPending: mocks.dispatch }));
 import { db } from "../src/lib/db";
@@ -27,7 +27,7 @@ beforeAll(async () => {
 });
 afterAll(async () => { await db().$disconnect(); await server.stop(); await pg.close(); vi.unstubAllEnvs(); });
 beforeEach(async () => {
-  vi.clearAllMocks(); mocks.save.mockResolvedValue(undefined); mocks.exists.mockResolvedValue(true); mocks.read.mockResolvedValue(image); mocks.archive.mockResolvedValue("drive-file"); mocks.dispatch.mockResolvedValue(undefined);
+  vi.clearAllMocks(); mocks.save.mockResolvedValue(undefined); mocks.exists.mockResolvedValue(true); mocks.read.mockResolvedValue(image); mocks.info.mockResolvedValue(null); mocks.archive.mockResolvedValue("drive-file"); mocks.dispatch.mockResolvedValue(undefined);
   userId = (await db().user.create({ data: { googleSub: randomUUID(), email: `${randomUUID()}@example.test` } })).id;
 });
 describe("durable intake and jobs (real SQL, stubbed cloud boundaries)", () => {
@@ -35,6 +35,7 @@ describe("durable intake and jobs (real SQL, stubbed cloud boundaries)", () => {
     const checksum = createHash("sha256").update(image).digest("hex");
     const receipt = await beginIntake(userId, randomUUID(), new Date(), checksum, image.length, "image/jpeg");
     mocks.exists.mockImplementation(async (key: string) => key.endsWith(".incoming"));
+    mocks.info.mockResolvedValue({ checksum, byteLength: image.length, generation: "1" });
     await reconcile();
     expect((await db().receipt.findUniqueOrThrow({ where: { id: receipt.id } })).intakeState).toBe("ACCEPTED");
     expect(mocks.save).toHaveBeenCalledWith(receipt.objectKey, image, "image/jpeg", checksum);
@@ -43,10 +44,20 @@ describe("durable intake and jobs (real SQL, stubbed cloud boundaries)", () => {
   it("rejects a staged image whose bytes differ from the signed intake metadata", async () => {
     const receipt = await beginIntake(userId, randomUUID(), new Date(), createHash("sha256").update(image).digest("hex"), image.length, "image/jpeg");
     mocks.exists.mockImplementation(async (key: string) => key.endsWith(".incoming")); mocks.read.mockResolvedValue(Buffer.alloc(image.length));
+    mocks.info.mockResolvedValue({ checksum: receipt.checksum, byteLength: image.length, generation: "1" });
     await expect(finishUpload(receipt)).rejects.toThrow("UPLOAD_CHECKSUM_MISMATCH");
     const result = await db().receipt.findUniqueOrThrow({ where: { id: receipt.id } });
-    expect(result.intakeState).toBe("UPLOADING"); expect(result.intakeError).toBe("UPLOAD_CHECKSUM_MISMATCH");
+    expect(result.intakeState).toBe("UPLOADING"); expect(result.intakeError).toBe("UPLOAD_CHECKSUM_MISMATCH:1");
     expect(await db().job.count({ where: { receiptId: receipt.id } })).toBe(0); expect(mocks.save).not.toHaveBeenCalled();
+  });
+  it("reconsiders a repaired staging generation even if the browser closes before completion", async () => {
+    const receipt = await beginIntake(userId, randomUUID(), new Date(), createHash("sha256").update(image).digest("hex"), image.length, "image/jpeg");
+    mocks.exists.mockResolvedValue(false); mocks.info.mockResolvedValue({ checksum: receipt.checksum, byteLength: image.length, generation: "1" }); mocks.read.mockResolvedValue(Buffer.alloc(image.length));
+    await expect(finishUpload(receipt)).rejects.toThrow("UPLOAD_CHECKSUM_MISMATCH");
+    const failed = await db().receipt.findUniqueOrThrow({ where: { id: receipt.id } });
+    mocks.read.mockClear(); expect(await finishUpload(failed)).toBeNull(); expect(mocks.read).not.toHaveBeenCalled();
+    mocks.info.mockResolvedValue({ checksum: receipt.checksum, byteLength: image.length, generation: "2" }); mocks.read.mockResolvedValue(image);
+    await reconcile(); expect((await db().receipt.findUniqueOrThrow({ where: { id: receipt.id } })).intakeState).toBe("ACCEPTED");
   });
   it("denies anonymous SQL access and keeps RLS active even with an accidental read grant", async () => {
     const state = await pg.query<{ enabled: boolean }>(`SELECT relrowsecurity AS enabled FROM pg_class WHERE relname = 'Receipt'`);

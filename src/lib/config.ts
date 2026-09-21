@@ -2,7 +2,9 @@ const required = ["DATABASE_URL", "NEXTAUTH_SECRET", "GOOGLE_CLIENT_ID", "GOOGLE
 
 export function configuration() {
   const missing: string[] = required.filter((key) => !process.env[key]?.trim());
-  if (process.env.VERCEL && !process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim()) missing.push("GOOGLE_SERVICE_ACCOUNT_JSON");
+  if (process.env.VERCEL && !process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim()) {
+    for (const key of ["GCP_PROJECT_NUMBER", "GCP_SERVICE_ACCOUNT_EMAIL", "GCP_WORKLOAD_IDENTITY_POOL_ID", "GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID"]) if (!process.env[key]?.trim()) missing.push(key);
+  }
   return { ready: missing.length === 0, missing, loginReady: ["DATABASE_URL", "NEXTAUTH_SECRET", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "TESTER_EMAILS"].every(key => !!process.env[key]?.trim()) };
 }
 export function env(key: string) {

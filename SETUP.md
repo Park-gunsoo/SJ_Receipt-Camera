@@ -47,7 +47,7 @@ http://localhost:3000/api/drive/callback
 
 `.env.example`을 참고해 로컬 `.env` 또는 Cloud Run Secret Manager에 설정합니다. TOKEN_ENCRYPTION_KEY는 32바이트 랜덤값의 base64, NEXTAUTH_SECRET은 별도의 충분히 긴 랜덤값입니다. 키를 바꾸면 기존 Drive 토큰을 복호화할 수 없으므로 재연결/키 이전 계획이 필요합니다.
 
-Cloud Run에서는 첨부 서비스 계정의 Application Default Credentials를 사용하며 서비스계정 JSON 키를 이미지에 넣지 않습니다. Vercel의 GOOGLE_SERVICE_ACCOUNT_JSON은 암호화한 서버 전용 환경변수로 설정하고 절대로 NEXT_PUBLIC 접두어를 사용하지 않습니다. 로컬 실제 호출을 테스트할 때만 `gcloud auth application-default login` 또는 안전한 별도 경로의 자격증명을 사용합니다.
+Cloud Run은 첨부 서비스 계정의 Application Default Credentials를 사용합니다. Vercel은 OIDC Workload Identity Federation으로 짧은 수명의 인증 토큰을 교환합니다. 신뢰 조건은 이 Vercel 팀·프로젝트의 production 및 승인된 development 환경으로 제한하며, 공개 저장소의 임의 PR 미리보기에는 권한을 주지 않습니다. GCP_PROJECT_NUMBER, GCP_SERVICE_ACCOUNT_EMAIL, GCP_WORKLOAD_IDENTITY_POOL_ID, GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID를 설정합니다. 서비스계정 JSON 키는 기본 배포에서 만들지 않습니다. 로컬 테스트는 별도 승인된 ADC 또는 이 프로젝트의 development OIDC를 사용합니다.
 
 ```powershell
 npm ci

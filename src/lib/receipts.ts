@@ -3,7 +3,7 @@ import type { Receipt } from "@/generated/prisma/client";
 import { db } from "./db";
 import { AppError } from "./http";
 import { setting } from "./config";
-import { imageExists, incomingKey, readImage, saveImage } from "./storage";
+import { imageExists, incomingInfo, incomingKey, readImage, saveImage } from "./storage";
 import { validateImage } from "./image";
 import type { ReceiptValues, ReceiptView } from "./contracts";
 
@@ -48,13 +48,16 @@ export async function finishUpload(receipt: Receipt): Promise<Receipt | null> {
   // Only the server can write the immutable final original.
   if (await imageExists(receipt.objectKey, receipt.checksum, receipt.byteLength)) return acceptStoredReceipt(receipt.id);
   const staging = incomingKey(receipt.objectKey);
-  if (!await imageExists(staging, receipt.checksum, receipt.byteLength)) return null;
-  const bytes = await readImage(staging);
+  const info = await incomingInfo(receipt.objectKey);
+  if (!info || receipt.intakeError?.endsWith(`:${info.generation}`)) return null;
+  let bytes: Buffer;
   try {
+    if (info.checksum !== receipt.checksum || info.byteLength !== receipt.byteLength) throw new AppError("UPLOAD_CHECKSUM_MISMATCH", 422);
+    bytes = await readImage(staging, info.generation);
     if (bytes.length !== receipt.byteLength || createHash("sha256").update(bytes).digest("hex") !== receipt.checksum) throw new AppError("UPLOAD_CHECKSUM_MISMATCH", 422);
     await validateImage(bytes, receipt.mimeType);
   } catch (error) {
-    await db().receipt.updateMany({ where: { id: receipt.id, intakeState: "UPLOADING" }, data: { intakeError: error instanceof AppError ? error.code : "INVALID_IMAGE" } });
+    if (error instanceof AppError) await db().receipt.updateMany({ where: { id: receipt.id, intakeState: "UPLOADING" }, data: { intakeError: `${error.code}:${info.generation}` } });
     throw error;
   }
   await saveImage(receipt.objectKey, bytes, receipt.mimeType, receipt.checksum);

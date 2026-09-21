@@ -31,4 +31,10 @@ export async function imageExists(key: string, checksum: string, size: number) {
     return metadata.metadata?.sha256 === checksum && Number(metadata.size) === size;
   } catch (error) { if ((error as { code?: number }).code === 404) return false; throw error; }
 }
-export async function readImage(key: string) { const [data] = await bucket().file(key).download(); return data; }
+export async function incomingInfo(key: string) {
+  try {
+    const [metadata] = await bucket().file(incomingKey(key)).getMetadata();
+    return { checksum: String(metadata.metadata?.sha256 ?? ""), byteLength: Number(metadata.size), generation: String(metadata.generation) };
+  } catch (error) { if ((error as { code?: number }).code === 404) return null; throw error; }
+}
+export async function readImage(key: string, generation?: string) { const [data] = await bucket().file(key, generation ? { generation } : undefined).download(); return data; }
