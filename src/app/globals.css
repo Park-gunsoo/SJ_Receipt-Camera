@@ -11,7 +11,7 @@ button:disabled { cursor:not-allowed; opacity:.5; }
 a { color:inherit; text-decoration:none; }
 button,input { border:0; }
 button { color:inherit; }
-button:focus-visible,a:focus-visible,input:focus-visible,summary:focus-visible { outline:3px solid #2c80a8; outline-offset:4px; }
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible { outline:3px solid #2c80a8; outline-offset:4px; }
 button,a,input { -webkit-tap-highlight-color:#bee6f788; }
 button { transition:background-color .18s,opacity .18s; }
 button:active:not(:disabled),a:active { opacity:.75; }
@@ -21,14 +21,20 @@ h2 { font-size:16px; font-weight:700; }
 small { font-size:12px; }
 .app-frame { max-width:480px; min-height:100svh; margin:0 auto; background:var(--bg); position:relative; box-shadow:0 0 64px #23475a08; }
 .app-header { display:flex; align-items:center; justify-content:space-between; padding:calc(20px + env(safe-area-inset-top)) 22px 18px; background:#fff; border-bottom:1px solid #eaf1f5; }
-.brand { display:flex; align-items:center; gap:10px; }
+.brand { display:flex; align-items:center; gap:8px; min-width:0; }
+.brand>span:last-child { min-width:0; }
+.app-header { gap:10px; }
+.header-actions { display:flex; align-items:center; gap:6px; flex:none; }
+.language-picker select { width:80px; min-height:48px; padding:8px 5px; border:1px solid var(--line); border-radius:12px; color:var(--ink); background:#f4fafd; font-size:12px; cursor:pointer; }
+html:lang(ko) body { font-family:"Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif; word-break:keep-all; }
+html:lang(en) body { font-family:system-ui,-apple-system,"Segoe UI",sans-serif; }
 .brand-mark { display:grid; place-items:center; width:44px; height:44px; border-radius:14px; background:#eaf7fe; overflow:hidden; flex:none; }
 .brand-mark .mascot { width:44px; height:44px; }
 .mascot { display:block; object-fit:contain; }
 .mascot-camera { border-radius:16px; }
-.brand strong { display:block; font-size:19px; letter-spacing:-.04em; font-weight:800; }
-.brand strong span { font-size:15px; font-weight:700; letter-spacing:-.03em; }
-.brand small { display:block; font-size:9px; color:var(--muted); letter-spacing:.02em; margin-top:1px; }
+.brand strong { display:block; font-size:19px; letter-spacing:-.04em; font-weight:800; line-height:1.3; }
+.brand strong span { display:inline-block; font-size:15px; font-weight:700; letter-spacing:-.03em; }
+.brand small { display:block; font-size:9px; color:var(--muted); letter-spacing:.02em; margin-top:3px; line-height:1.45; }
 .icon-button { width:44px; height:44px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; flex:none; background:#fff; border:1px solid var(--line); }
 .icon-button:hover,.icon-button.active { background:#eaf6fc; }
 .main-content { padding:27px 24px calc(102px + env(safe-area-inset-bottom)); }
@@ -37,6 +43,8 @@ small { font-size:12px; }
 .bottom-nav a { display:flex; flex-direction:column; align-items:center; gap:3px; min-width:104px; min-height:52px; border-radius:15px; padding:6px 10px; color:var(--muted); font-size:11px; font-weight:600; }
 .bottom-nav a[aria-current=page] { background:#e9f6fc; color:#246d8f; }
 .page-heading { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.page-heading>div,.helper-card>div { min-width:0; }
+.button svg,.helper-card svg { flex:none; }
 .eyebrow { font-size:9px; font-weight:750; letter-spacing:.18em; color:#567c8f; margin-bottom:7px; }
 .page-lead { color:var(--muted); font-size:13px; margin:7px 0 20px; }
 .connection-pill { display:flex; align-items:center; gap:6px; font-size:10px; background:#e9f0f3; color:#526c7a; border-radius:20px; padding:6px 9px; white-space:nowrap; align-self:flex-end; margin-bottom:7px; }

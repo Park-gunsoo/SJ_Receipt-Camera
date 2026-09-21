@@ -1,5 +1,5 @@
-const CACHE = "sj-shell-v3-mascot";
-const STATIC = ["/offline.html", "/icon-sj-192.png", "/icon-sj-512.png", "/mascot/sj-history.webp"];
+const CACHE = "sj-shell-v4-languages";
+const STATIC = ["/offline.html", "/offline-language.js", "/translations.json", "/icon-sj-192.png", "/icon-sj-512.png", "/mascot/sj-history.webp"];
 self.addEventListener("install", event => {
   event.waitUntil((async () => {
     await (await caches.open(CACHE)).addAll(STATIC);

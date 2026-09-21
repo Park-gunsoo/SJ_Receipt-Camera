@@ -13,12 +13,15 @@
   a{display:inline-block;background:#b9e7fa;color:#163e52;border-radius:16px;padding:12px 24px;text-decoration:none;font-weight:700}
   p{color:#526c7a;text-align:left}
   small{display:block;margin-top:28px}
+  label{display:block;text-align:right;margin-bottom:12px}select{font:inherit;min-height:48px;padding:8px;border:1px solid #dbe8ef;border-radius:10px;background:white;color:#163e52}
 </style>
 <main>
-  <img src="/mascot/sj-history.webp" width="180" height="180" alt="レシートのフォルダを持ったSJの柴犬">
-  <h1>接続を待っています</h1>
-  <p>端末に一時保存できた写真は残っています。インターネットに接続し、同じアカウントで開くと自動で再送します。</p>
-  <a href="/m/capture">もう一度開く</a>
-  <small>SJ レシートカメラ</small>
+  <label><select id="language" aria-label="表示言語"><option value="ja" lang="ja">日本語</option><option value="ko" lang="ko">한국어</option><option value="en" lang="en">English</option></select></label>
+  <img id="mascot" src="/mascot/sj-history.webp" width="180" height="180" alt="レシートのフォルダを持ったSJの柴犬">
+  <h1 data-message="接続を待っています">接続を待っています</h1>
+  <p data-message="端末に一時保存できた写真は残っています。インターネットに接続し、同じアカウントで開くと自動で再送します。">端末に一時保存できた写真は残っています。インターネットに接続し、同じアカウントで開くと自動で再送します。</p>
+  <a href="/m/capture" data-message="もう一度開く">もう一度開く</a>
+  <small data-message="SJ レシートカメラ">SJ レシートカメラ</small>
 </main>
+<script src="/offline-language.js"></script>
 </html>

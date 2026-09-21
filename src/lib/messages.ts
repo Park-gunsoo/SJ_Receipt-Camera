@@ -1,5 +1,10 @@
-export function errorMessage(code: string) {
+import { displayText, type Locale } from "./i18n";
+export function errorMessage(code: string, locale: Locale = "ja") {
   const messages: Record<string, string> = {
+    CAMERA_UNAVAILABLE: "カメラを開けませんでした。ブラウザの権限を確認するか、写真から読み込んでください。",
+    CONNECTION_REQUIRED: "先にGoogleとDriveを接続してください。",
+    CAPTURE_FAILED: "撮影できませんでした。もう一度お試しください。",
+    TORCH_UNAVAILABLE: "この端末ではライトを切り替えられません。",
     UNAUTHORIZED: "ログインし直してください。未送信の写真は、このアカウントで再開できます。",
     ACCOUNT_CHANGED: "アカウントが切り替わりました。元のアカウントで再開してください。",
     DRIVE_RECONNECT: "Google Driveを再接続してください。写真は未送信のまま保持します。",
@@ -21,5 +26,5 @@ export function errorMessage(code: string) {
     LOCAL_STORAGE: "端末への一時保存ができません。受付完了まで画面を閉じないでください。",
     OFFLINE: "未送信。接続後、または次回この画面を開くと再送します。",
   };
-  return messages[code] ?? "処理できませんでした。写真を保持して再試行します。";
+  return displayText(messages[code] ?? "処理できませんでした。写真を保持して再試行します。", locale);
 }

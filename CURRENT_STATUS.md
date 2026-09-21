@@ -4,7 +4,7 @@
 
 ## Implemented
 
-- Japanese capture/start/history/detail/account pages; sky-blue design. The original vector Shiba was replaced with the user's approved illustrated mascot on 2026-09-21; matching history and app-icon variants were generated and saved with provenance/prompts under public/mascot/.
+- Japanese/Korean/English capture/start/history/detail/account pages on mobile and desktop browsers; sky-blue design. Browser language is detected initially, and a shared header selector remembers manual choices per device/browser. The original vector Shiba was replaced with the user's approved illustrated mascot on 2026-09-21; matching history and app-icon variants were generated and saved with provenance/prompts under public/mascot/.
 - Google login and separate encrypted Drive offline consent; server-owned intake and private read APIs.
 - GCS image/PDF archive, Vision OCR, rule extraction, durable database jobs/leases/outbox and Cloud Tasks/Scheduler adapters.
 - Per-user IndexedDB retry; receipt/image/PDF ownership; origin validation and bounded image intake.
@@ -16,7 +16,8 @@
 
 - Mascot update (2026-09-21): source PNG hash preserved; two matching variants generated with the built-in image tool. New header, start/capture, empty-history and offline images load correctly in the browser. App icons checked at 32/180/192/512px. Latest lint and production build passed. These checks do not claim physical Android launcher-icon or offline-network validation.
 
-- 31 automated tests passed across extraction, crypto/access, offline ownership, image/PDF, direct storage upload and real-SQL durability, including recovery after a rejected staging generation. Cloud call boundaries in these tests are stubbed.
+- 36 automated tests passed across extraction, crypto/access, offline ownership, image/PDF, direct storage upload, real-SQL durability and language selection/date/currency/error boundaries. Cloud call boundaries in these tests are stubbed.
+- Multilingual UI (2026-09-21): local production build, TypeScript and scoped ESLint checks passed. Browser checks covered Japanese/Korean/English switching, browser-language detection, reload persistence, same-origin tab synchronization, search-state preservation, 360px mobile and 1920px desktop layouts, localized titles, and translated offline-page content. No horizontal overflow or console errors were observed. Actual offline network interruption and physical-phone localization have not been tested. Original OCR text, merchant names, JPY values, DB schema, permissions and real Drive folder names are unchanged.
 - TypeScript production build passed, including standalone artifact tracing. Sharp and Drive module loading from the standalone output checked.
 - ESLint passed at the last code check; runtime dependency audit reached zero known vulnerabilities after updates.
 - Browser: actual 390px capture/start/history/account screens, navigation and 360px no-horizontal-overflow check. No Next.js error overlay. An initial missing favicon was fixed.

@@ -1,6 +1,6 @@
 # SJ レシートカメラ — MVP flow
 
-Approved scope: private test for the owner and invited testers. Japanese mobile capture, automatic receipt intake, Google Drive PDF archive, real Vision OCR and read-only history. No PC editor, export, public registration, image similarity search or perspective correction in this increment.
+Approved scope: private test for the owner and invited testers. Japanese receipt capture with Japanese/Korean/English display on mobile and desktop browsers, automatic receipt intake, Google Drive PDF archive, real Vision OCR and read-only history. No PC editor, export, public registration, image similarity search or perspective correction in this increment.
 
 1. Google sign-in identifies the user. A separate Drive consent grants `drive.file` and offline access to the same Google account.
 2. One shutter press creates a UUID and saves a Blob in that user's IndexedDB. Upload starts without a second confirmation. Failed local storage is visible; server upload can still proceed.

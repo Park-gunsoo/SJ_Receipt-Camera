@@ -1,6 +1,6 @@
 # Design contract
 
-Sky blue and white, warm brown/cream Shiba, Japanese UI. The supplied brief takes precedence over generic skill search suggestions. No landing-page reviews, ratings, fake screenshots or fabricated metrics.
+Sky blue and white, warm brown/cream Shiba. UI supports Japanese, Korean and English (approved 2026-09-21). Initially use the first supported browser language, falling back to Japanese; remember manual choices per browser. Keep the native language names 日本語 / 한국어 / English in the shared header selector. Allow longer translations to wrap without shrinking controls or losing content. The supplied brief takes precedence over generic skill search suggestions. No landing-page reviews, ratings, fake screenshots or fabricated metrics.
 
 Primary #B9E7FA with text #163E52; white cards on #F4FAFD; muted ink #526C7A; completion pale green, caution amber. Contrast checked numerically. Body 16px, Japanese system sans font, 48px minimum controls, visible focus, safe-area padding. Desktop is a centered mobile workspace, not a new dashboard.
 
