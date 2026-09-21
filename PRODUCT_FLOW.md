@@ -1,5 +1,7 @@
 # SJ レシートカメラ — MVP flow
 
+2026-09-21 inline editing/export approved: edit one ledger row in place, including date, merchant/summary, category, amount and tax/payment details, then explicitly save or cancel. Reuse the existing owner/version/revision API. Pause polling and guard navigation while a draft is open; never overwrite drafts. Excel download offers Japanese/Korean/English and either all current filter matches (across all pages, default) or all active owned receipts. Export only persisted values and exclude trash. No additional OCR or Drive action is triggered by export.
+
 2026-09-21 ledger redesign approved: the desktop list becomes a spreadsheet-style ledger with server-side search, date/category/amount/processing filters, sorting and pagination. Mobile capture remains unchanged. Common account suggestions apply to companies and sole proprietors without an entity selector. Existing OCR and purchase evidence produce provisional suggestions; unclear purposes show alternatives. Human edits win. No tax deductibility or asset expense eligibility is automatically confirmed.
 
 Approved scope: private test for the owner and invited testers. Japanese receipt capture with Japanese/Korean/English display, automatic intake, private app PDF storage, optional Google Drive backup, real Vision OCR, mobile results and a desktop web review/editor. The owner approved the recommended app-first storage and existing-OCR improvement approach on 2026-09-21. No public registration, image similarity search or perspective correction in this increment.

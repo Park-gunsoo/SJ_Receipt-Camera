@@ -15,7 +15,7 @@ import { beginIntake, finishUpload, intake, ownedReceipt } from "../src/lib/rece
 import { claimJob, completeJob, reconcile, runJob } from "../src/lib/jobs";
 import { saveReceiptEdit } from "../src/lib/receipt-editor";
 import { listTrashedReceipts, setReceiptTrashed } from "../src/lib/receipt-trash";
-import { listReceiptLedger } from "../src/lib/receipt-ledger";
+import { exportReceiptLedger, listReceiptLedger } from "../src/lib/receipt-ledger";
 import { defaultLedgerQuery } from "../src/lib/ledger-query";
 import { refreshReceiptClassification } from "../src/lib/refresh-classification";
 import { extractReceipt } from "../src/lib/extraction";
@@ -52,6 +52,9 @@ describe("durable intake and jobs (real SQL, stubbed cloud boundaries)", () => {
     expect(result.total).toBe(1); expect(result.receipts[0].id).toBe(target.id);
     expect((await listReceiptLedger("another-owner", defaultLedgerQuery)).total).toBe(0);
     expect((await listReceiptLedger(userId, defaultLedgerQuery)).total).toBe(2);
+    expect(await exportReceiptLedger("another-owner", defaultLedgerQuery)).toHaveLength(0);
+    const exported = await exportReceiptLedger(userId, { ...defaultLedgerQuery, category: "車両費", min: 0, max: 0 });
+    expect(exported.map(row => row.id)).toEqual([target.id]); expect(exported[0]).not.toHaveProperty("rawOcr"); expect(exported[0]).not.toHaveProperty("objectKey");
   });
   it("paginates and sorts all matching rows with unknown dates last", async () => {
     for (let i = 0; i < 28; i++) await db().receipt.create({ data: { userId, captureId: randomUUID(), objectKey: randomUUID(), capturedAt: new Date(), checksum: "test", byteLength: 1, mimeType: "image/jpeg", intakeState: "ACCEPTED", totalYen: i, transactionDate: i === 27 ? null : "2026-09-21" } });
@@ -61,6 +64,12 @@ describe("durable intake and jobs (real SQL, stubbed cloud boundaries)", () => {
     const dates = await listReceiptLedger(userId, { ...defaultLedgerQuery, sort: "date", direction: "asc", page: 2 });
     expect(dates.receipts.at(-1)!.transactionDate).toBeNull();
     expect((await listReceiptLedger(userId, { ...defaultLedgerQuery, page: 999 })).page).toBe(2);
+    const exported = await exportReceiptLedger(userId, { ...defaultLedgerQuery, sort: "amount", direction: "asc", page: 2 });
+    expect(exported).toHaveLength(28); expect(exported[0].totalYen).toBe(0); expect(exported.at(-1)!.totalYen).toBe(27);
+  });
+  it("rejects oversized exports rather than returning a partial workbook", async () => {
+    await db().$executeRaw`INSERT INTO "Receipt" (id,"userId","captureId","capturedAt","objectKey",checksum,"byteLength","mimeType","intakeState","updatedAt") SELECT 'limit-' || n, ${userId}, 'cap-' || n, NOW(), 'key-' || n, 'test', 1, 'image/jpeg', 'ACCEPTED', NOW() FROM generate_series(1,5001) AS n`;
+    await expect(exportReceiptLedger(userId, defaultLedgerQuery)).rejects.toThrow("EXPORT_LIMIT");
   });
   it("treats search metacharacters literally and filters JSON null/missing categories", async () => {
     for (const [merchant, values] of [["100% sample", { category: null }], ["100 percent", { summary: "unknown category" }], ["known", { category: "消耗品費" }]] as const) await db().receipt.create({ data: { userId, captureId: randomUUID(), objectKey: randomUUID(), capturedAt: new Date(), checksum: "test", byteLength: 1, mimeType: "image/jpeg", intakeState: "ACCEPTED", merchant, values } });

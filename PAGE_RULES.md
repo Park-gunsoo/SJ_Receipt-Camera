@@ -1,5 +1,7 @@
 # Mobile pages
 
+Inline ledger changes (approved 2026-09-21): a visible row-edit button switches that row's cells to inputs, including the always-visible account category column. Show explicit save/cancel and a collapsible tax/payment section within the list. One row at a time; polling, filter/sort/page changes and export wait until save/cancel. Preserve drafts on validation/conflict/network errors and guard navigation. The Excel toolbar opens language/scope choices and reports actual download results. Default export scope is all saved matches of applied filters, not only the current page; raw merchant/description text is not translated.
+
 Desktop ledger update (approved 2026-09-21): `/web/receipts` uses a dense table with purchase date, merchant/summary, account category, amount, printed taxes, analysis/PDF status and a row-action menu. Filters/sort cover all owned non-trash records, not just the loaded page. Conditions live in the URL and survive editor/back navigation. No nonfunctional bulk/export controls. Edit/PDF/trash remain real; deletion confirms and is reversible. The editor offers Japanese account names with localized labels and custom names. Classification reasons and alternatives remain suggestions.
 
 - `/m/start`: localized introduction and Google login; capture is available without Drive. Drive backup is clearly optional and configured on the account page.

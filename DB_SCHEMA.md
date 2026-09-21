@@ -1,5 +1,7 @@
 # Database contract
 
+Inline editing/XLSX export (2026-09-21): no migration. Inline edits use the same values/version/ReceiptRevision path as detail editing. Export reads saved active owner records in one repeatable-read snapshot with the same filter predicates as the ledger, excluding raw OCR/storage keys and all trash. No export rows or files are stored in the DB.
+
 Ledger/classification update (2026-09-21): no schema migration. Common canonical Japanese category names remain in `Receipt.values.category`; alternative candidates/reasons use `Receipt.extraction.classification`. Existing custom names and legacy extraction JSON remain readable. Filtering/counting/sorting stays owner-scoped in PostgreSQL. Cached-OCR category refresh preserves every user-edited value, original OCR, date, amount and file reference, with optimistic version checks.
 
 PostgreSQL + Prisma, hosted in a new dedicated Supabase project (approved 2026-09-21). Supabase Auth/Storage are not used. The authoritative machine schema is `prisma/schema.prisma`. UTC instants; receipt transaction dates are Japanese calendar dates (`YYYY-MM-DD`) rather than capture timestamps. JPY values are integer yen and nullable (zero is a valid amount).

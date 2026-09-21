@@ -1,5 +1,7 @@
 # API and durable processing
 
+- `POST /api/receipts/export`: same-origin, authenticated owner header, bounded strict `{ locale: ja|ko|en, scope: filtered|all, query: string }`. Reuse validated ledger predicates/order in a repeatable-read snapshot, ignoring pagination. Return an actual private no-store XLSX of saved active owned receipts. At most 5,000 receipts and 4 MiB per file; reject excessive exports with guidance, never silently truncate. No signed file URLs, raw OCR, formulas from receipt text or data writes in export.
+
 - Desktop `GET /api/receipts/ledger` validates text/date/category/amount/analysis filters, whitelisted sort and bounded pages, then filters/counts/paginates inside the authenticated owner scope. Search uses literal merchant/summary text; nulls stay unknown. The mobile cursor endpoint remains compatible. No migration/new external API. Classification metadata comes from existing extraction JSON; raw OCR is not returned through the list.
 
 - NextAuth Google sign-in at `/api/auth/*`; separate Drive connect/callback under `/api/drive/*` binds consent to the current user and validates OAuth state and Google subject.

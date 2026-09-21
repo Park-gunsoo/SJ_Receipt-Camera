@@ -1,6 +1,10 @@
 import { displayText, type Locale } from "./i18n";
 export function errorMessage(code: string, locale: Locale = "ja") {
   const messages: Record<string, string> = {
+    EXPORT_FAILED: "Excelを作成できませんでした。接続を確認して再試行してください。",
+    EXPORT_LIMIT: "一度に5,000件まで出力できます。日付などで範囲を絞ってください。",
+    EXPORT_FILE_LIMIT: "ファイルが大きすぎます。検索条件で範囲を絞ってください。",
+    EXPORT_TEXT_LIMIT: "Excelのセル上限を超えるテキストがあります。長い摘要を確認してください。",
     TRASH_FAILED: "ゴミ箱に移動できませんでした。接続を確認して再試行してください。",
     RESTORE_FAILED: "復元できませんでした。接続を確認して再試行してください。",
     RECEIPT_CHANGED: "レシートの状態が更新されています。画面を更新してから、もう一度操作してください。",

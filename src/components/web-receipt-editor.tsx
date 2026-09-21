@@ -6,7 +6,7 @@ import { signIn } from "next-auth/react";
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { ArrowLeft, Check, ExternalLink, FileText, Minus, Plus, Save, Trash2 } from "lucide-react";
 import type { ReceiptView } from "@/lib/contracts";
-import type { ReceiptEdit } from "@/lib/receipt-editor";
+import { toDraft, editValues, type Draft } from "@/lib/receipt-draft";
 import { errorMessage } from "@/lib/messages";
 import { displayText } from "@/lib/i18n";
 import { useApp } from "./app-provider";
@@ -15,23 +15,6 @@ import { Status } from "./status";
 import { ReceiptTrashButton } from "./receipt-trash-button";
 import { CategoryField } from "./category-field";
 
-type TaxDraft = { rate: string; taxableYen: string; taxYen: string };
-type Draft = { merchant: string; transactionDate: string; totalYen: string; paymentMethod: string; registrationNumber: string; category: string; summary: string; taxes: TaxDraft[] };
-const numberText = (value: number | null | undefined) => value === null || value === undefined ? "" : String(value);
-function toDraft(receipt: ReceiptView): Draft {
-  const v = receipt.values;
-  return { merchant: v?.merchant ?? receipt.merchant ?? "", transactionDate: v?.transactionDate ?? receipt.transactionDate ?? "", totalYen: numberText(v?.totalYen ?? receipt.totalYen), paymentMethod: v?.paymentMethod ?? "", registrationNumber: v?.registrationNumber ?? "", category: v?.category ?? "", summary: v?.summary ?? "", taxes: (v?.taxes ?? []).map(tax => ({ rate: numberText(tax.rate), taxableYen: numberText(tax.taxableYen), taxYen: numberText(tax.taxYen) })) };
-}
-function numberValue(value: string, rate = false) {
-  if (!value.trim()) return null;
-  const number = Number(value);
-  if (!Number.isFinite(number) || number < 0 || number > (rate ? 100 : 999999999) || !rate && !Number.isInteger(number)) throw new Error("INVALID_INPUT");
-  return number;
-}
-function editValues(draft: Draft): ReceiptEdit["values"] {
-  const text = (value: string) => value.trim() || null;
-  return { merchant: text(draft.merchant), transactionDate: text(draft.transactionDate), totalYen: numberValue(draft.totalYen), paymentMethod: text(draft.paymentMethod), registrationNumber: text(draft.registrationNumber)?.toUpperCase() ?? null, category: text(draft.category), summary: text(draft.summary), taxes: draft.taxes.map(tax => ({ rate: numberValue(tax.rate, true), taxableYen: numberValue(tax.taxableYen), taxYen: numberValue(tax.taxYen) })).filter(tax => Object.values(tax).some(value => value !== null)) };
-}
 export function WebReceiptEditor({ id, returnHref = "/web/receipts" }: { id: string; returnHref?: string }) {
   const router = useRouter();
   const { t, locale } = useLanguage();
