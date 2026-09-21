@@ -63,9 +63,11 @@ export function extractReceipt(rawText: string, pages?: unknown[]): Extraction {
     const dateText = text.replace(/[ \t]*([年月日/.-])[ \t]*/g, "$1");
     if (!/有効|期限|発行期限|生年月日/.test(normalized)) {
       const found: { value: string | null; end: number }[] = [];
-      for (const m of dateText.matchAll(/(?<![\dRH和成])(20\d{2}|\d{2})[年/.-](\d{1,2})[月/.-](\d{1,2})日?(?!\d)/g)) found.push({ value: validDate(m[1].length === 2 ? 2000 + +m[1] : +m[1], +m[2], +m[3]), end: m.index! + m[0].length });
-      for (const m of dateText.matchAll(/(?:令和|平成|[RH])\.?([元\d]{1,2})[年/.-](\d{1,2})[月/.-](\d{1,2})日?/g)) {
-        const reiwa = /令和|R/.test(m[0]), year = (m[1] === "元" ? 1 : +m[1]) + (reiwa ? 2018 : 1988);
+      const eraPattern = /(?:令和|平成|[RH])\s*\.?\s*([元\d]{1,2})[年/.-](\d{1,2})[月/.-](\d{1,2})日?/gi;
+      const westernText = dateText.replace(eraPattern, value => " ".repeat(value.length));
+      for (const m of westernText.matchAll(/(?<!\d)(20\d{2}|\d{2})[年/.-](\d{1,2})[月/.-](\d{1,2})日?(?!\d)/g)) found.push({ value: validDate(m[1].length === 2 ? 2000 + +m[1] : +m[1], +m[2], +m[3]), end: m.index! + m[0].length });
+      for (const m of dateText.matchAll(eraPattern)) {
+        const reiwa = /令和|R/i.test(m[0]), year = (m[1] === "元" ? 1 : +m[1]) + (reiwa ? 2018 : 1988);
         const value = validDate(year, +m[2], +m[3]);
         if (value && (reiwa ? value >= "2019-05-01" : value <= "2019-04-30")) found.push({ value, end: m.index! + m[0].length });
       }

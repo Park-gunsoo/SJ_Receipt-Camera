@@ -21,6 +21,8 @@ describe("Japanese receipt extraction", () => {
     expect(extractReceipt("26/04/05 13:00").values.transactionDate).toBe("2026-04-05");
     expect(extractReceipt("令和8年4月5日").values.transactionDate).toBe("2026-04-05");
     expect(extractReceipt("R08.4.5").values.transactionDate).toBe("2026-04-05");
+    expect(extractReceipt("令和 8 年 4 月 5 日").values.transactionDate).toBe("2026-04-05");
+    expect(extractReceipt("R 08 . 4 . 5").values.transactionDate).toBe("2026-04-05");
     expect(extractReceipt("令和元年1月1日").values.transactionDate).toBeNull();
   });
   it("associates a rate-free tax row with its adjacent tax group", () => {
