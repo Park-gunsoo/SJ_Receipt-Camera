@@ -23,6 +23,7 @@
 ## Verified
 
 - Ledger verification: all 105 tests passed, including real-SQL owner isolation, filters, literal searches, sorting/pagination, safe category refresh and 17 classifier cases. TypeScript, ESLint and the local production build passed. An isolated local UI backed by a disposable SQL database passed combined category/amount filtering, amount sorting, category save, return-to-filter links and row-menu delete/cancel/restore. Korean/Japanese/English layouts were inspected at 1920px, 1440px and 390px. This fixture is explicitly labelled and never connects to production receipts. Existing cached OCR was previewed for six real receipts: two vehicle, one transport and one shipping suggestion; two remain unresolved. One human-edited record's values are protected. Live category application and release verification are tracked separately.
+- Live category refresh: all six owned, active, OCR-complete receipts received the new suggestion metadata from cached OCR. The original images/checksums, dates, amounts, merchant values, Drive references and all human-edited values matched the private pre-update snapshot. No new OCR call was made. Two receipts still lack enough evidence for an automatic category; one edited receipt keeps its chosen/current values and exposes the new suggestion separately.
 
 - Trash checks (2026-09-21): 70 tests, TypeScript, ESLint and the local production build passed, including real-SQL owner isolation, optimistic trash/restore transitions, pagination, unchanged originals/values/revisions, paused pending jobs, and in-flight PDF/OCR completion/failure preservation. API tests cover origin/account/input bounds and denied file access. An isolated local UI fixture (explicitly labelled mock, no production DB/Drive access) passed list/detail deletion, cancellation, unsaved-input warning, restore, restored-detail navigation and deleted-detail rejection. Japanese/Korean/English copy and a 390px trash layout were checked; no horizontal overflow or runtime console error was observed in the positive flow. Real production receipts were not deleted for testing.
 
@@ -42,6 +43,8 @@
 - Live Google sign-in, Drive connection, real receipt views and web-save feedback were checked in the browser. Actual camera capture and scanning-to-result navigation on the user's phone still require a physical-device check.
 
 ## External state / blockers
+
+- Ledger worker at code commit `b96d68f` built successfully and deployed as private revision `sj-receipt-worker-00007-c4v`. A federated non-record task was consumed with HTTP 200 and Scheduler reconciliation returned 200. Vercel preview at the same code commit is READY; the production branch contains the same implementation plus release notes. No schema migration or external-provider change was required.
 
 - Trash worker at code commit `9a9d4f8` built successfully in Cloud Build and deployed as private revision `sj-receipt-worker-00006-p5f`. Its non-record smoke task was consumed with HTTP 200; Scheduler reconciliation also returned 200. No migration or receipt data write was required for this release. The web build contains `/web/trash`, `DELETE /api/receipts/:id`, `POST /api/receipts/:id/restore` and the owner-scoped trash list.
 
