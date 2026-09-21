@@ -21,6 +21,7 @@ RUN groupadd --system --gid 1001 nodejs && useradd --system --uid 1001 --gid nod
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+RUN node --input-type=module -e "await Promise.all(['@google-cloud/tasks', '@google-cloud/vision', '@google-cloud/storage', '@prisma/adapter-pg', 'sharp', 'googleapis'].map(name => import(name)))"
 USER nextjs
 EXPOSE 8080
 CMD ["node", "server.js"]

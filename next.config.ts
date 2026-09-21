@@ -3,7 +3,11 @@ import type { NextConfig } from "next";
 const config: NextConfig = {
   output: "standalone",
   devIndicators: false,
-  outputFileTracingIncludes: { "/*": ["./certs/supabase-ca.crt"] },
+  outputFileTracingIncludes: {
+    "/*": ["./certs/supabase-ca.crt"],
+    // Google clients load these descriptors through a dynamic JSON helper.
+    "/api/*": ["./node_modules/@google-cloud/tasks/build/**/*.json", "./node_modules/@google-cloud/vision/build/**/*.json"],
+  },
   serverExternalPackages: ["@prisma/client", "@prisma/adapter-pg", "sharp", "@google-cloud/vision", "@google-cloud/tasks", "@google-cloud/storage", "googleapis"],
   async headers() {
     return [{ source: "/:path*", headers: [
