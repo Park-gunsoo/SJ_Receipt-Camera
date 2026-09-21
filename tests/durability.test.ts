@@ -12,6 +12,7 @@ vi.mock("@/lib/queue", () => ({ dispatchPending: mocks.dispatch }));
 import { db } from "../src/lib/db";
 import { beginIntake, finishUpload, intake, ownedReceipt } from "../src/lib/receipts";
 import { claimJob, completeJob, reconcile, runJob } from "../src/lib/jobs";
+import { saveReceiptEdit } from "../src/lib/receipt-editor";
 
 let pg: PGlite, server: PGLiteSocketServer, image: Buffer;
 let userId: string;
@@ -31,6 +32,33 @@ beforeEach(async () => {
   userId = (await db().user.create({ data: { googleSub: randomUUID(), email: `${randomUUID()}@example.test` } })).id;
 });
 describe("durable intake and jobs (real SQL, stubbed cloud boundaries)", () => {
+  it("saves owned edits and revision atomically, rejecting stale or different-owner writes", async () => {
+    const receipt = await intake(userId, randomUUID(), new Date(), image, "image/jpeg");
+    await db().receipt.update({ where: { id: receipt.id }, data: { ocrState: "DONE", rawOcr: { text: "private original evidence" } } });
+    const values = { merchant: "Edited store", transactionDate: "2026-04-05", totalYen: 0, taxes: [], paymentMethod: null, registrationNumber: null, category: null, summary: null };
+    await expect(saveReceiptEdit("different-owner", receipt.id, { version: 0, values })).rejects.toThrow("NOT_FOUND");
+    const result = await saveReceiptEdit(userId, receipt.id, { version: 0, values });
+    expect(result.totalYen).toBe(0); expect(result.version).toBe(1); expect(result.userEdited).toBe(true);
+    expect(result.rawOcr).toEqual({ text: "private original evidence" });
+    expect(await db().receiptRevision.count({ where: { receiptId: receipt.id, actorId: userId } })).toBe(1);
+    await expect(saveReceiptEdit(userId, receipt.id, { version: 0, values: { ...values, totalYen: 999 } })).rejects.toThrow("EDIT_CONFLICT");
+    expect((await db().receipt.findUniqueOrThrow({ where: { id: receipt.id } })).totalYen).toBe(0);
+    expect(await db().receiptRevision.count({ where: { receiptId: receipt.id } })).toBe(1);
+  });
+  it("waits for initial analysis before accepting manual edits", async () => {
+    const receipt = await intake(userId, randomUUID(), new Date(), image, "image/jpeg");
+    await expect(saveReceiptEdit(userId, receipt.id, { version: 0, values: { merchant: null, transactionDate: null, totalYen: null, taxes: [], paymentMethod: null, registrationNumber: null, category: null, summary: null } })).rejects.toThrow("ANALYSIS_PENDING");
+  });
+  it("requeues metadata when values change during an existing metadata lease", async () => {
+    const receipt = await intake(userId, randomUUID(), new Date(), image, "image/jpeg");
+    await db().receipt.update({ where: { id: receipt.id }, data: { ocrState: "DONE", archiveState: "SAVED", driveFileId: randomUUID() } });
+    const job = await db().job.create({ data: { receiptId: receipt.id, kind: "METADATA" } });
+    const lease = await claimJob(job.id);
+    await saveReceiptEdit(userId, receipt.id, { version: 0, values: { merchant: "Corrected", transactionDate: null, totalYen: null, taxes: [], paymentMethod: null, registrationNumber: null, category: null, summary: null } });
+    expect((await db().job.findUniqueOrThrow({ where: { id: job.id } })).leaseToken).toBe(lease!.leaseToken);
+    await completeJob(job.id, lease!.leaseToken!, {}, 0);
+    expect((await db().job.findUniqueOrThrow({ where: { id: job.id } })).state).toBe("PENDING");
+  });
   it("recovers a direct upload without the browser's completion call", async () => {
     const checksum = createHash("sha256").update(image).digest("hex");
     const receipt = await beginIntake(userId, randomUUID(), new Date(), checksum, image.length, "image/jpeg");

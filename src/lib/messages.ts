@@ -1,6 +1,10 @@
 import { displayText, type Locale } from "./i18n";
 export function errorMessage(code: string, locale: Locale = "ja") {
   const messages: Record<string, string> = {
+    EDIT_CONFLICT: "別の更新があります。入力内容は保持しています。最新の内容を確認してから保存してください。",
+    INVALID_INPUT: "入力内容を確認してください。日付・金額・登録番号の形式が正しくありません。",
+    SAVE_FAILED: "保存できませんでした。入力内容は保持しています。接続を確認して再試行してください。",
+    ANALYSIS_PENDING: "読み取り中…",
     CAMERA_UNAVAILABLE: "カメラを開けませんでした。ブラウザの権限を確認するか、写真から読み込んでください。",
     CONNECTION_REQUIRED: "先にGoogleとDriveを接続してください。",
     CAPTURE_FAILED: "撮影できませんでした。もう一度お試しください。",

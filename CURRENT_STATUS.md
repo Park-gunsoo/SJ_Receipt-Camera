@@ -4,6 +4,8 @@
 
 ## Implemented
 
+- Work in progress (2026-09-21): OCR layout reconstruction, short-year/era/date-weekday checks, mixed-rate tax extraction, automatic capture-to-result navigation, and `/web/receipts` plus version-checked web editing. Uses the existing ReceiptRevision table; no DB migration or authentication-role change. Drive behavior is unchanged pending the owner's storage choice. These changes are not deployed yet.
+
 - Japanese/Korean/English capture/start/history/detail/account pages on mobile and desktop browsers; sky-blue design. Browser language is detected initially, and a shared header selector remembers manual choices per device/browser. The original vector Shiba was replaced with the user's approved illustrated mascot on 2026-09-21; matching history and app-icon variants were generated and saved with provenance/prompts under public/mascot/.
 - Google login and separate encrypted Drive offline consent; server-owned intake and private read APIs.
 - GCS image/PDF archive, Vision OCR, rule extraction, durable database jobs/leases/outbox and Cloud Tasks/Scheduler adapters.
@@ -13,6 +15,8 @@
 - Test-phase originals are retained without automatic deletion. Android is the first physical-device target.
 
 ## Verified
+
+- Review-flow local checks: 47 tests passed, including layout/date/tax regressions, editor validation, ownership, stale-version refusal, revision writes and metadata rescheduling during edits. Four private receipt originals and their cached OCR were reviewed locally: date matches improved from 3/4 to 4/4, printed tax amounts from 0/3 to 3/3, and totals from 2/4 to 3/4. One receipt prints only the tax rate, so its tax amount remains null; one total and one taxable amount remain uncertain. These are a small local comparison, not a general accuracy guarantee. No new paid OCR call was used for this comparison, and private receipt files are excluded from Git.
 
 - Mascot update (2026-09-21): source PNG hash preserved; two matching variants generated with the built-in image tool. New header, start/capture, empty-history and offline images load correctly in the browser. App icons checked at 32/180/192/512px. Latest lint and production build passed. These checks do not claim physical Android launcher-icon or offline-network validation.
 
@@ -33,7 +37,7 @@
 - Vercel development identity successfully exchanged a short-lived token, read private-object metadata and signed an upload policy. A temporary non-receipt payload uploaded directly to GCS with HTTP 201, exact byte count and the production CORS origin; the probe object was removed and no receipt row was created. Production identity is scoped to this Vercel team/project; preview identities are excluded.
 - Linux Node 22 clean install and Vercel builds passed after restoring missing optional dependencies in the lockfile. Runtime checks caught dynamic Google descriptor files omitted by Next.js tracing; explicit trace includes and a Docker runtime import/CA check were added. The worker image at code commit `74e269c` passed these checks and was deployed as revision `sj-receipt-worker-00003-lhd`.
 - Live Cloud Run IAM remains private. A task queued using Vercel federation reached `/api/jobs/run` with HTTP 200 and was consumed. Scheduler reached `/api/jobs/reconcile` with HTTP 200. The smoke task used an absent job ID, so it did not insert a receipt or trigger paid OCR.
-- Live receipt upload, Vision OCR and PDF archive are not yet verified with a real receipt.
+- The live DB now contains four real receipts with OCR DONE and archive SAVED. Their original storage images and cached OCR were inspected for the accuracy work. Physical Android capture/close/offline behavior still needs separate validation.
 - No Android/iPhone camera, slow-network, screen-lock or installed-PWA test on a physical phone yet.
 
 ## Follow-up

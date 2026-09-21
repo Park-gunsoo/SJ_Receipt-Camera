@@ -1,6 +1,6 @@
 # SJ レシートカメラ — MVP flow
 
-Approved scope: private test for the owner and invited testers. Japanese receipt capture with Japanese/Korean/English display on mobile and desktop browsers, automatic receipt intake, Google Drive PDF archive, real Vision OCR and read-only history. No PC editor, export, public registration, image similarity search or perspective correction in this increment.
+Approved scope: private test for the owner and invited testers. Japanese receipt capture with Japanese/Korean/English display, automatic receipt intake, Google Drive PDF archive, real Vision OCR, mobile results and a desktop web review/editor. No export, public registration, image similarity search or perspective correction in this increment. The requested optional-Drive change requires a separate storage decision; the existing Drive requirement remains until that choice is confirmed.
 
 1. Google sign-in identifies the user. A separate Drive consent grants `drive.file` and offline access to the same Google account.
 2. One shutter press creates a UUID and saves a Blob in that user's IndexedDB. Upload starts without a second confirmation. Failed local storage is visible; server upload can still proceed.
@@ -9,6 +9,8 @@ Approved scope: private test for the owner and invited testers. Japanese receipt
 5. The client may close after acceptance. Before acceptance, only completed IndexedDB writes can be retried on a later visit. No guarantee of uploading while the browser is closed.
 6. Archive uses a preallocated, DB-persisted Drive file ID, so lost responses do not create another PDF. OCR stores raw evidence, candidates and versioned results. A separate metadata job updates that same PDF after extraction.
 7. Uncertain values remain null / 未確認. Categories are suggestions, not confirmed accounting decisions. Mobile reads do not mark records reviewed.
+8. When the active capture finishes OCR, move straight to its result page; PDF/Drive status continues independently. A failed/limited read stops scanning and leaves a result link. The result page links to the exact web editor.
+9. Web editing shows the original image alongside editable fields. Explicit saves use owner checks and an expected version, write a revision, and preserve original OCR evidence. Polling never replaces unsaved input. Saving an edit does not automatically mark the receipt as formally reviewed. Drive metadata is refreshed without creating a second PDF.
 
 Test-phase default: no automatic server-image deletion; the account privacy page must say so. Drive PDFs are retained. No automatic deletion is introduced without a reviewed policy. Other accounts' offline items must never be uploaded or displayed in the current account.
 

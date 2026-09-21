@@ -11,6 +11,7 @@ import { extractReceipt } from "./extraction";
 import { googleError } from "./http";
 import { dispatchPending } from "./queue";
 import { googleCloudOptions } from "./google-cloud";
+import { requestMetadata } from "./metadata-job";
 
 type ReceiptPatch = Prisma.ReceiptUpdateManyMutationInput;
 const asJson = (data: unknown) => JSON.parse(JSON.stringify(data)) as Prisma.InputJsonValue;
@@ -27,14 +28,15 @@ async function patchWithLease(id: string, token: string, patch: ReceiptPatch) {
     await tx.receipt.updateMany({ where: { id: job.receiptId, deletedAt: null }, data: patch });
   });
 }
-export async function completeJob(id: string, token: string, patch: ReceiptPatch = {}) {
+export async function completeJob(id: string, token: string, patch: ReceiptPatch = {}, expectedVersion?: number) {
   return db().$transaction(async tx => {
     const completed = await tx.job.updateMany({ where: { id, state: "RUNNING", leaseToken: token, leaseUntil: { gt: new Date() } }, data: { state: "DONE", completedAt: new Date(), lastError: null, leaseToken: null, leaseUntil: null } });
     if (!completed.count) return false;
     const job = await tx.job.findUniqueOrThrow({ where: { id } });
     await tx.receipt.updateMany({ where: { id: job.receiptId, deletedAt: null }, data: patch });
     const receipt = await tx.receipt.findUniqueOrThrow({ where: { id: job.receiptId } });
-    if (job.kind !== "METADATA" && receipt.archiveState === "SAVED" && receipt.ocrState === "DONE") await tx.job.upsert({ where: { receiptId_kind: { receiptId: receipt.id, kind: "METADATA" } }, create: { receiptId: receipt.id, kind: "METADATA" }, update: {} });
+    if (job.kind === "METADATA" && expectedVersion !== undefined && receipt.version !== expectedVersion) await tx.job.update({ where: { id }, data: { state: "PENDING", attempts: 0, enqueuedAt: null, completedAt: null, nextRunAt: new Date() } });
+    if (job.kind !== "METADATA" && receipt.archiveState === "SAVED" && receipt.ocrState === "DONE") await requestMetadata(tx, receipt.id);
     return true;
   });
 }
@@ -65,7 +67,7 @@ async function processOcr(job: NonNullable<Awaited<ReturnType<typeof claimJob>>>
     } finally { await client.close(); }
   }
   if (!raw.text?.trim()) throw new Error("OCR_EMPTY");
-  const extraction = extractReceipt(raw.text);
+  const extraction = extractReceipt(raw.text, raw.pages);
   // A future PC edit may have happened during the paid call. Preserve it atomically.
   await db().$transaction(async tx => {
     const lock = await tx.job.updateMany({ where: { id: job.id, state: "RUNNING", leaseToken: job.leaseToken, leaseUntil: { gt: new Date() } }, data: { updatedAt: new Date() } });
@@ -90,7 +92,7 @@ export async function runJob(id: string) {
       await archivePdf(job.receiptId, pdf);
       await completeJob(job.id, job.leaseToken!, { archiveState: "SAVED", archiveError: null });
     } else if (job.kind === "OCR") await processOcr(job);
-    else { await updatePdfMetadata(job.receiptId); await completeJob(job.id, job.leaseToken!, { archiveError: null }); }
+    else { await updatePdfMetadata(job.receiptId); await completeJob(job.id, job.leaseToken!, { archiveError: null }, job.receipt.version); }
   } catch (error) {
     if ((error as Error).message === "LOST_LEASE") return { skipped: true };
     const explicit = ["OCR_LIMIT", "OCR_EMPTY", "DRIVE_RECONNECT", "DRIVE_FILE_TRASHED"].includes((error as Error).message) ? (error as Error).message : null;

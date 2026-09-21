@@ -15,6 +15,22 @@ export function sameOrigin(request: Request) {
   const expected = new URL(process.env.APP_URL ?? request.url).origin;
   if (!origin || origin !== expected) throw new AppError("INVALID_ORIGIN", 403);
 }
+export async function boundedJson(request: Request, limit = 32768): Promise<unknown> {
+  if (!/^application\/json(?:;|$)/i.test(request.headers.get("content-type") ?? "") || Number(request.headers.get("content-length")) > limit || !request.body) throw new AppError("INVALID_INPUT");
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = []; let size = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read(); if (done) break;
+      size += value.byteLength;
+      if (size > limit) { await reader.cancel(); throw new AppError("INVALID_INPUT"); }
+      chunks.push(value);
+    }
+  } finally { reader.releaseLock(); }
+  const bytes = new Uint8Array(size); let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
+  try { return JSON.parse(new TextDecoder().decode(bytes)); } catch { throw new AppError("INVALID_INPUT"); }
+}
 export async function boundedFormData(request: Request, maxBytes: number) {
   if (Number(request.headers.get("content-length")) > maxBytes) throw new AppError("FILE_TOO_LARGE", 413);
   if (!request.body) throw new AppError("INVALID_UPLOAD");

@@ -3,6 +3,7 @@ import { useLanguage } from "./language-provider";
 /* Camera/video and private Blob URLs deliberately use native media elements. */
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Camera, ImagePlus, ScanLine, ShieldCheck, ArrowRight, Check, CloudUpload, Zap, ZapOff, RotateCcw } from "lucide-react";
 import { useApp } from "./app-provider";
@@ -13,6 +14,7 @@ import type { ReceiptView } from "@/lib/contracts";
 
 export function CaptureScreen() {
   const { t, locale } = useLanguage();
+  const router = useRouter();
   const { account, online, pendingCount, latest, capture, retry } = useApp();
   const video = useRef<HTMLVideoElement>(null);
   const stream = useRef<MediaStream | null>(null);
@@ -30,6 +32,9 @@ export function CaptureScreen() {
   const active = !!preview && latest?.captureId === preview.captureId;
   const terminal = receipt && ["DONE", "FAILED", "LIMIT_REACHED"].includes(receipt.ocrState) && ["SAVED", "FAILED", "BLOCKED"].includes(receipt.archiveState);
   const scanning = active && (latest?.phase === "sending" || (latest?.phase === "accepted" && !!receipt && ["PENDING", "PROCESSING"].includes(receipt.ocrState)));
+  useEffect(() => {
+    if (active && latest?.phase === "accepted" && receipt?.ocrState === "DONE") router.replace(`/m/receipts/${receipt.id}`);
+  }, [active, latest?.phase, receipt?.id, receipt?.ocrState, router]);
   const stopCamera = useCallback(() => {
     stream.current?.getTracks().forEach(track => track.stop()); stream.current = null;
     setCameraOpen(false); setTorch(false); setCanTorch(false);
@@ -97,7 +102,7 @@ export function CaptureScreen() {
     </div>
     {error && <div className="notice caution" role="alert">{errorMessage(error, locale)}</div>}
     {preview ? <div className="capture-result" aria-live="polite">
-      {active && latest?.phase === "accepted" && <><div className="accepted-title"><Check size={18} />{t("受付完了")}</div><p>{t("画面を閉じても処理は続きます。")}</p>{receipt && <><Status receipt={receipt} />{receipt.ocrState === "DONE" && <p>{receipt.merchant ?? t("店舗名 未確認")} · {yen(receipt.totalYen, locale)}</p>}</>}</>}
+      {active && latest?.phase === "accepted" && <><div className="accepted-title"><Check size={18} />{t("受付完了")}</div><p>{t("分析が完了すると、結果画面に移動します。")} {t("PDF・Driveの保存は引き続き処理されます。")}</p>{receipt && <><Status receipt={receipt} />{receipt.ocrState === "DONE" && <p>{receipt.merchant ?? t("店舗名 未確認")} · {yen(receipt.totalYen, locale)}</p>}</>}</>}
       {active && latest?.phase === "sending" && <><strong>{t("写真を送信しています…")}</strong><p>{t("受付完了まで、この画面を開いたままお待ちください。")}</p></>}
       {active && latest?.phase === "pending" && <><strong>{t("まだ送信されていません")}</strong><p>{latest.localSaved ? errorMessage(latest.error ?? "OFFLINE", locale) : t("端末にも保存できていません。画面を閉じる前に下の写真を保存してください。")}</p>{!latest.localSaved && <a className="text-link" href={preview.url} download="receipt.jpg">{t("この写真を端末に保存")}</a>}</>}
       {active && latest?.phase === "sending" && latest.localSaved === false && <p className="notice caution">{errorMessage("LOCAL_STORAGE", locale)}</p>}

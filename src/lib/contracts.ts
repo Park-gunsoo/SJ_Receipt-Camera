@@ -20,6 +20,7 @@ export type Extraction = {
   classification: Classification;
 };
 export type ReceiptView = {
+  version: number; userEdited: boolean;
   id: string; captureId: string; capturedAt: string; createdAt: string; acceptedAt: string | null;
   intakeState: string; archiveState: string; ocrState: string; reviewState: string;
   merchant: string | null; transactionDate: string | null; totalYen: number | null;

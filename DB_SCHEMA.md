@@ -8,7 +8,7 @@ PostgreSQL + Prisma, hosted in a new dedicated Supabase project (approved 2026-0
 - Job: unique receipt + kind (ARCHIVE, OCR, METADATA), persisted state, attempt count, next run, lease token/expiry, sanitized error code. Claim and completion use lease fencing.
 - DriveFolder: unique owner + logical folder path and preallocated file ID. Concurrent captures share folders safely.
 - UsageDay: per-user JST day intake and OCR counters, reserved atomically; configurable caps.
-- ReceiptRevision: future PC edits' values, version, actor and time. Analysis must never overwrite user-edited values.
+- ReceiptRevision: PC edits' values, version, actor and time. The existing table is used for explicit web saves; optimistic version checks prevent a stale browser from overwriting a newer edit. Analysis must never overwrite user-edited values.
 
 All receipt access filters by server-authenticated user ID and non-deleted status. No client-supplied owner is trusted. Sensitive receipt bodies are not written to application logs.
 

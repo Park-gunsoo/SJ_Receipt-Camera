@@ -6,7 +6,14 @@
 - `/m/receipts/[id]`: zoomable image, private PDF, extracted fields, evidence/review reasons, Drive link. No edit/delete/confirmation controls.
 - `/m/account`: identity, Drive status/folder, reconnect, logout with pending count, install and privacy information.
 
-Bottom navigation has 撮影 and 履歴 only. Account in header. PC functionality is not yet available: show `内容の編集機能は準備中です。` rather than advertising a working PC screen. Configuration preview may show the actual empty UI but must disable intake and never invent records or successful integration.
+Bottom navigation has 撮影 and 履歴 only. Account in header. Configuration preview may show the actual empty UI but must disable intake and never invent records or successful integration.
+
+## Capture results and web editing (requested 2026-09-21)
+
+- Show the moving scan line only on the actual captured image while uploading/reading; do not invent progress or delay completion. Once that capture's OCR succeeds, automatically replace the capture route with its mobile detail page. PDF/Drive completion is independent. Failed/limited OCR must stop the animation and offer the result page and retry guidance.
+- `/web/receipts`: real owned receipt list, search/date filters and links to each editor. Keep the existing sky-blue Shiba identity and all three display languages. No unrelated dashboard or fabricated statistics.
+- `/web/receipts/[id]`: desktop-first original image on the left, editable extracted fields on the right; responsive single-column layout on smaller screens. Show actual processing status, clear save feedback, server validation and stale-version conflicts. Original OCR evidence remains unchanged. Do not replace a dirty form when polling returns.
+- Mobile detail includes an actual link to the matching web editor and explains that corrections can be made on the web. Navigation must preserve the login destination. Saving edits is an explicit action; simply viewing the page never confirms a receipt.
 
 ## Display languages (approved 2026-09-21)
 
