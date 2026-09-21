@@ -4,7 +4,7 @@
 
 ## Implemented
 
-- Approved trash/restore (2026-09-21), implementation under verification: delete confirmation in the web list/editor, owner-scoped `/web/trash` and version-checked restore. Reuses `deletedAt` without a DB migration. Original photos, PDFs, Drive files and revisions are retained; normal mobile/web reads hide trash. In-flight processing retains completion/failure results while pending work waits for restore.
+- Approved trash/restore (2026-09-21): delete confirmation in the web list/editor, owner-scoped `/web/trash` and version-checked restore. Reuses `deletedAt` without a DB migration. Original photos, PDFs, Drive files and revisions are retained; normal mobile/web reads hide trash. In-flight processing retains completion/failure results while pending work waits for restore.
 
 - Optional Drive / app PDF change approved and released 2026-09-21: independent private app PDFs, PDF job/state, optional per-account automatic Drive backup for new receipts, and capture/retry without Drive. Additive migration `202609210004_app_pdf` is applied. All four existing receipts now have valid private app PDFs; original checksums, values, versions, manual-edit flags and Drive IDs matched the pre-migration baseline.
 
@@ -20,7 +20,7 @@
 
 ## Verified
 
-- Trash checks (2026-09-21): 70 tests passed, including real-SQL owner isolation, optimistic trash/restore transitions, pagination, unchanged originals/values/revisions, paused pending jobs, and in-flight PDF/OCR completion/failure preservation. API tests cover origin/account/input bounds and denied file access. An isolated local UI fixture (explicitly labelled mock, no production DB/Drive access) passed list/detail deletion, cancellation, unsaved-input warning, restore, restored-detail navigation and deleted-detail rejection. Japanese/Korean/English copy and a 390px trash layout were checked; no horizontal overflow or runtime console error was observed in the positive flow. Real production receipts were not deleted for testing.
+- Trash checks (2026-09-21): 70 tests, TypeScript, ESLint and the local production build passed, including real-SQL owner isolation, optimistic trash/restore transitions, pagination, unchanged originals/values/revisions, paused pending jobs, and in-flight PDF/OCR completion/failure preservation. API tests cover origin/account/input bounds and denied file access. An isolated local UI fixture (explicitly labelled mock, no production DB/Drive access) passed list/detail deletion, cancellation, unsaved-input warning, restore, restored-detail navigation and deleted-detail rejection. Japanese/Korean/English copy and a 390px trash layout were checked; no horizontal overflow or runtime console error was observed in the positive flow. Real production receipts were not deleted for testing.
 
 - App PDF release: 59 automated tests, TypeScript, ESLint and the local production build passed. Added coverage includes Drive-free acceptance, backup-choice idempotence, independent Drive/PDF failures, private PDF ownership, legacy backfill preservation and immutable PDF provenance. Production browser checks confirmed backup OFF survives reload, capture stays enabled, and an existing app PDF opens in Chrome's PDF viewer with backup OFF. The existing user's backup setting was restored to ON after verification. Actual new Android capture with backup OFF remains a physical-device check.
 
@@ -29,7 +29,7 @@
 
 - Mascot update (2026-09-21): source PNG hash preserved; two matching variants generated with the built-in image tool. New header, start/capture, empty-history and offline images load correctly in the browser. App icons checked at 32/180/192/512px. Latest lint and production build passed. These checks do not claim physical Android launcher-icon or offline-network validation.
 
-- 59 automated tests passed across extraction, crypto/access, offline ownership, image/PDF, direct storage upload, real-SQL durability, optional Drive backup, web editing and language selection/date/currency/error boundaries. Cloud call boundaries in these tests are stubbed.
+- 70 automated tests passed across extraction, crypto/access, offline ownership, image/PDF, direct storage upload, real-SQL durability, optional Drive backup, web editing, trash/restore and language selection/date/currency/error boundaries. Cloud call boundaries in these tests are stubbed.
 - Multilingual UI (2026-09-21): local production build, TypeScript and scoped ESLint checks passed. Browser checks covered Japanese/Korean/English switching, browser-language detection, reload persistence, same-origin tab synchronization, search-state preservation, 360px mobile and 1920px desktop layouts, localized titles, and translated offline-page content. No horizontal overflow or console errors were observed. Actual offline network interruption and physical-phone localization have not been tested. Original OCR text, merchant names, JPY values, DB schema, permissions and real Drive folder names are unchanged.
 - TypeScript production build passed, including standalone artifact tracing. Sharp and Drive module loading from the standalone output checked.
 - ESLint passed at the last code check; runtime dependency audit reached zero known vulnerabilities after updates.
@@ -38,6 +38,8 @@
 - Live Google sign-in, Drive connection, real receipt views and web-save feedback were checked in the browser. Actual camera capture and scanning-to-result navigation on the user's phone still require a physical-device check.
 
 ## External state / blockers
+
+- Trash worker at code commit `9a9d4f8` built successfully in Cloud Build and deployed as private revision `sj-receipt-worker-00006-p5f`. Its non-record smoke task was consumed with HTTP 200; Scheduler reconciliation also returned 200. No migration or receipt data write was required for this release. The web build contains `/web/trash`, `DELETE /api/receipts/:id`, `POST /api/receipts/:id/restore` and the owner-scoped trash list.
 
 - Supabase organization SJ Receipt Camera is on Pro. The dedicated sj-receipt-camera project is healthy in Tokyo. Strict TLS connectivity and all four migrations were verified. No other service's database is used or deleted.
 - GitHub: https://github.com/Park-gunsoo/SJ_Receipt-Camera, default branch `codex/initial-mvp`. Secrets, local tooling and deployment credentials are excluded from Git.
