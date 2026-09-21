@@ -1,0 +1,154 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum IntakeState {
+  UPLOADING
+  ACCEPTED
+}
+enum ArchiveState {
+  PENDING
+  PROCESSING
+  SAVED
+  BLOCKED
+  FAILED
+}
+enum OcrState {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
+  LIMIT_REACHED
+}
+enum ReviewState {
+  UNREVIEWED
+  NEEDS_REVIEW
+  CONFIRMED
+}
+enum JobKind {
+  ARCHIVE
+  OCR
+  METADATA
+}
+enum JobState {
+  PENDING
+  RUNNING
+  DONE
+  BLOCKED
+  FAILED
+}
+
+model User {
+  id          String   @id @default(uuid())
+  googleSub   String   @unique
+  email       String   @unique
+  name        String?
+  createdAt   DateTime @default(now())
+  drive       DriveConnection?
+  receipts    Receipt[]
+  folders     DriveFolder[]
+  usage       UsageDay[]
+}
+
+model DriveConnection {
+  userId                String   @id
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  encryptedRefreshToken String
+  status                String   @default("CONNECTED")
+  rootFolderId          String?
+  updatedAt             DateTime @updatedAt
+}
+
+model DriveFolder {
+  id        String @id @default(uuid())
+  userId    String
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  path      String
+  fileId    String @unique
+  @@unique([userId, path])
+}
+
+model Receipt {
+  id              String       @id @default(uuid())
+  userId          String
+  user            User         @relation(fields: [userId], references: [id])
+  captureId       String
+  capturedAt      DateTime
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  acceptedAt      DateTime?
+  intakeState     IntakeState  @default(UPLOADING)
+  intakeError     String?
+  archiveState    ArchiveState @default(PENDING)
+  ocrState        OcrState     @default(PENDING)
+  reviewState     ReviewState  @default(UNREVIEWED)
+  objectKey       String       @unique
+  checksum        String
+  byteLength      Int
+  mimeType        String
+  driveFileId     String?      @unique
+  driveFolderId   String?
+  archiveError    String?
+  ocrError        String?
+  rawOcr          Json?
+  extraction      Json?
+  values          Json?
+  reviewReasons   String[]     @default([])
+  merchant        String?
+  transactionDate String?
+  totalYen        Int?
+  extractionVersion String?
+  userEdited      Boolean      @default(false)
+  version         Int          @default(0)
+  duplicateGroupId String?
+  deletedAt       DateTime?
+  jobs            Job[]
+  revisions       ReceiptRevision[]
+  @@unique([userId, captureId])
+  @@index([userId, createdAt, id])
+  @@index([intakeState, createdAt])
+}
+
+model Job {
+  id            String   @id @default(uuid())
+  receiptId     String
+  receipt       Receipt  @relation(fields: [receiptId], references: [id])
+  kind          JobKind
+  state         JobState @default(PENDING)
+  attempts      Int      @default(0)
+  nextRunAt     DateTime @default(now())
+  leaseToken    String?
+  leaseUntil    DateTime?
+  lastError     String?
+  enqueuedAt    DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  @@unique([receiptId, kind])
+  @@index([state, nextRunAt])
+}
+
+model ReceiptRevision {
+  id        String   @id @default(uuid())
+  receiptId String
+  receipt   Receipt  @relation(fields: [receiptId], references: [id])
+  version   Int
+  actorId   String
+  values    Json
+  createdAt DateTime @default(now())
+  @@unique([receiptId, version])
+}
+
+model UsageDay {
+  userId   String
+  user     User   @relation(fields: [userId], references: [id])
+  day      String
+  intake   Int    @default(0)
+  ocr      Int    @default(0)
+  @@id([userId, day])
+}

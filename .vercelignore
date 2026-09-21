@@ -1,0 +1,14 @@
+.git
+.env
+.env.*
+.local
+.next
+node_modules
+output
+.playwright-cli
+test-results
+playwright-report
+coverage
+service-account*.json
+credentials*.json
+*.log

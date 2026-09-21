@@ -1,0 +1,14 @@
+# API and durable processing
+
+- NextAuth Google sign-in at `/api/auth/*`; separate Drive connect/callback under `/api/drive/*` binds consent to the current user and validates OAuth state and Google subject.
+- `POST /api/uploads`: same-origin JSON `captureId`, `capturedAt`, `checksum`, `byteLength`, `mimeType`, authenticated owner header. Returns an existing accepted receipt or a 5-minute GCS policy restricted to a staging object, MIME type, checksum metadata and exact byte length. JPEG/PNG/WebP, max 12 MiB.
+- `POST /api/uploads/:id/complete`: verifies ownership, actual image bytes/checksum/type, seals a server-only immutable original, then atomically records acceptance/jobs. Cloud Run reconciliation performs the same finalization if the browser disappears. Staging metadata alone is never acceptance. Invalid images are quarantined from repeated background reads until the user retries.
+- `POST /api/receipts`: legacy multipart intake for direct Cloud Run use; not used by the Vercel mobile client. Owner + capture ID prevent duplicates.
+- `GET /api/receipts`: bounded pagination, query and date filtering. `GET /api/receipts/:id`: read-only values and independent processing states.
+- `GET /api/receipts/:id/image`: authenticated owner only; thumbnails return small private no-store images; originals redirect to a 60-second private GCS URL. `/pdf` verifies ownership then opens the private Drive PDF viewer. Large image/PDF bytes do not pass through Vercel's 4.5MB response limit.
+- `GET /api/me`: current account, connection, local configuration readiness (no secrets).
+- `POST /api/jobs/run`: Cloud Tasks OIDC token with exact audience and service-account email; bounded lease and retries. `POST /api/jobs/reconcile`: same identity validation; invoked by Cloud Scheduler every minute. Requests from regular users are rejected.
+
+Database outbox is authoritative. Queue delivery may repeat. All completed steps are checked before paid calls. Automatic retry is bounded, with backoff; reconnect can resume only relevant blocked work. Task payload contains job ID only. Drive permission/capacity errors are user-action states, not success.
+
+Runtime target: Next.js web/API on Vercel, with a separate Node standalone Cloud Run processing service, private GCS, Cloud Tasks, Vision and Supabase PostgreSQL. APP_URL is the Vercel origin; WORKER_BASE_URL is the Cloud Run origin and OIDC audience. Vercel receives GOOGLE_SERVICE_ACCOUNT_JSON only as an encrypted server-side secret; Cloud Run uses its attached service account. Cloud resources are not provisioned or charged by local development scripts.

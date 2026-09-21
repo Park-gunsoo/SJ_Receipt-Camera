@@ -1,0 +1,2 @@
+import type { MetadataRoute } from "next";
+export default function manifest(): MetadataRoute.Manifest { return { name: "SJ レシートカメラ", short_name: "SJ レシート", description: "撮るだけ。保存も整理も自動で。", start_url: "/m/capture", scope: "/", display: "standalone", background_color: "#F4FAFD", theme_color: "#F4FAFD", lang: "ja", icons: [{ src: "/icon-sj-192.png", sizes: "192x192", type: "image/png" }, { src: "/icon-sj-512.png", sizes: "512x512", type: "image/png", purpose: "any" }] }; }
