@@ -1,2 +1,3 @@
-import { HistoryScreen } from "@/components/history-screen";
-export default function Page() { return <HistoryScreen desktop />; }
+import { Suspense } from "react";
+import { ReceiptLedger } from "@/components/receipt-ledger";
+export default function Page() { return <Suspense><ReceiptLedger /></Suspense>; }

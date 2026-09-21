@@ -1,5 +1,7 @@
 # Design contract
 
+Approved desktop direction (2026-09-21): compact white ledger grid, thin row/column dividers, aligned dates and right-aligned tabular amounts. Restrained sky-blue accents, 13–14px table text, 48px action targets, sticky headers and labelled filters. Desktop width may grow to 1600px. Keep the supplied Shiba in the brand/empty states. Destructive actions belong inside row menus, not scattered red buttons. Narrow viewports scroll inside the table. No unrelated KPI cards, fabricated statistics or oversized hero.
+
 Sky blue and white, warm brown/cream Shiba. UI supports Japanese, Korean and English (approved 2026-09-21). Initially use the first supported browser language, falling back to Japanese; remember manual choices per browser. Keep the native language names 日本語 / 한국어 / English in the shared header selector. Allow longer translations to wrap without shrinking controls or losing content. The supplied brief takes precedence over generic skill search suggestions. No landing-page reviews, ratings, fake screenshots or fabricated metrics.
 
 Primary #B9E7FA with text #163E52; white cards on #F4FAFD; muted ink #526C7A; completion pale green, caution amber. Contrast checked numerically. Body 16px, Japanese system sans font, 48px minimum controls, visible focus, safe-area padding. Mobile pages stay centered at 480px. The dedicated web receipt workspace uses up to 1240px: a real receipt list and a two-column original-image/editor view, collapsing to one column on smaller screens. No unrelated dashboard panels or statistics.

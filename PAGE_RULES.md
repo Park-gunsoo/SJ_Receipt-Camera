@@ -1,5 +1,7 @@
 # Mobile pages
 
+Desktop ledger update (approved 2026-09-21): `/web/receipts` uses a dense table with purchase date, merchant/summary, account category, amount, printed taxes, analysis/PDF status and a row-action menu. Filters/sort cover all owned non-trash records, not just the loaded page. Conditions live in the URL and survive editor/back navigation. No nonfunctional bulk/export controls. Edit/PDF/trash remain real; deletion confirms and is reversible. The editor offers Japanese account names with localized labels and custom names. Classification reasons and alternatives remain suggestions.
+
 - `/m/start`: localized introduction and Google login; capture is available without Drive. Drive backup is clearly optional and configured on the account page.
 - `/m/capture`: primary route; rear camera, receipt guide, shutter, album alternative; actual captured image overlay, true send/accepted/OCR/archive states, next-shot link.
 - `/m/receipts`: real records, merchant/date filters, thumbnail, amount and processing states; empty/error/offline are distinct.

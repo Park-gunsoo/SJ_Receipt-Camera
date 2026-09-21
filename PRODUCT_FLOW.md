@@ -1,5 +1,7 @@
 # SJ レシートカメラ — MVP flow
 
+2026-09-21 ledger redesign approved: the desktop list becomes a spreadsheet-style ledger with server-side search, date/category/amount/processing filters, sorting and pagination. Mobile capture remains unchanged. Common account suggestions apply to companies and sole proprietors without an entity selector. Existing OCR and purchase evidence produce provisional suggestions; unclear purposes show alternatives. Human edits win. No tax deductibility or asset expense eligibility is automatically confirmed.
+
 Approved scope: private test for the owner and invited testers. Japanese receipt capture with Japanese/Korean/English display, automatic intake, private app PDF storage, optional Google Drive backup, real Vision OCR, mobile results and a desktop web review/editor. The owner approved the recommended app-first storage and existing-OCR improvement approach on 2026-09-21. No public registration, image similarity search or perspective correction in this increment.
 
 1. Google sign-in is sufficient for capture. Optional Drive consent grants `drive.file` and offline access to the same account. Existing connected accounts keep automatic backup enabled; the account screen can turn backup on or off for newly accepted receipts. Previously accepted work and existing Drive files remain intact.

@@ -5,7 +5,7 @@ import { AppError } from "./http";
 import { setting } from "./config";
 import { imageExists, incomingInfo, incomingKey, readImage, saveImage } from "./storage";
 import { validateImage } from "./image";
-import type { ReceiptValues, ReceiptView } from "./contracts";
+import type { Extraction, ReceiptValues, ReceiptView } from "./contracts";
 
 export function jstDay(date = new Date()) { return new Date(date.getTime() + 9 * 60 * 60000).toISOString().slice(0, 10); }
 export async function acceptStoredReceipt(id: string) {
@@ -70,7 +70,7 @@ export async function finishUpload(receipt: Receipt): Promise<Receipt | null> {
   return acceptStoredReceipt(receipt.id);
 }
 export function receiptView(receipt: Receipt): ReceiptView {
-  return { pdfState: receipt.pdfState, pdfError: receipt.pdfError, version: receipt.version, userEdited: receipt.userEdited, id: receipt.id, captureId: receipt.captureId, capturedAt: receipt.capturedAt.toISOString(), createdAt: receipt.createdAt.toISOString(), acceptedAt: receipt.acceptedAt?.toISOString() ?? null, intakeState: receipt.intakeState, archiveState: receipt.archiveState, ocrState: receipt.ocrState, reviewState: receipt.reviewState, merchant: receipt.merchant, transactionDate: receipt.transactionDate, totalYen: receipt.totalYen, values: receipt.values as ReceiptValues | null, reviewReasons: receipt.reviewReasons, archiveError: receipt.archiveError, ocrError: receipt.ocrError, driveUrl: receipt.archiveState === "SAVED" && receipt.driveFileId ? `https://drive.google.com/file/d/${receipt.driveFileId}/view` : null };
+  return { classification: (receipt.extraction as Extraction | null)?.classification ?? null, pdfState: receipt.pdfState, pdfError: receipt.pdfError, version: receipt.version, userEdited: receipt.userEdited, id: receipt.id, captureId: receipt.captureId, capturedAt: receipt.capturedAt.toISOString(), createdAt: receipt.createdAt.toISOString(), acceptedAt: receipt.acceptedAt?.toISOString() ?? null, intakeState: receipt.intakeState, archiveState: receipt.archiveState, ocrState: receipt.ocrState, reviewState: receipt.reviewState, merchant: receipt.merchant, transactionDate: receipt.transactionDate, totalYen: receipt.totalYen, values: receipt.values as ReceiptValues | null, reviewReasons: receipt.reviewReasons, archiveError: receipt.archiveError, ocrError: receipt.ocrError, driveUrl: receipt.archiveState === "SAVED" && receipt.driveFileId ? `https://drive.google.com/file/d/${receipt.driveFileId}/view` : null };
 }
 export async function ownedReceipt(userId: string, id: string) {
   const receipt = await db().receipt.findFirst({ where: { id, userId, deletedAt: null, intakeState: "ACCEPTED" } });

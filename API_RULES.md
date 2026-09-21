@@ -1,5 +1,7 @@
 # API and durable processing
 
+- Desktop `GET /api/receipts/ledger` validates text/date/category/amount/analysis filters, whitelisted sort and bounded pages, then filters/counts/paginates inside the authenticated owner scope. Search uses literal merchant/summary text; nulls stay unknown. The mobile cursor endpoint remains compatible. No migration/new external API. Classification metadata comes from existing extraction JSON; raw OCR is not returned through the list.
+
 - NextAuth Google sign-in at `/api/auth/*`; separate Drive connect/callback under `/api/drive/*` binds consent to the current user and validates OAuth state and Google subject.
 - Drive consent is optional for capture. `PATCH /api/drive/settings` accepts only an owner-authenticated, same-origin `{ backupEnabled: boolean }` request and changes future receipt acceptance. It neither deletes prior backups nor revokes the existing OAuth connection.
 - `POST /api/uploads`: same-origin JSON `captureId`, `capturedAt`, `checksum`, `byteLength`, `mimeType`, authenticated owner header. Returns an existing accepted receipt or a 5-minute GCS policy restricted to a staging object, MIME type, checksum metadata and exact byte length. JPEG/PNG/WebP, max 12 MiB.

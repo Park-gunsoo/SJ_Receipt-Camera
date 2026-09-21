@@ -1,6 +1,7 @@
 import type { Candidate, Extraction, ReceiptValues } from "./contracts";
 import { rulesClassifier } from "./classifier";
 import { receiptLines } from "./ocr-layout";
+import { accountCategoryNames } from "./account-categories";
 
 export function validDate(year: number, month: number, day: number): string | null {
   if (year < 2000 || year > 2100) return null;
@@ -100,10 +101,10 @@ export function extractReceipt(rawText: string, pages?: unknown[]): Extraction {
   const paymentLine = lines.find(line => /クレジット|PayPay|交通系IC|現金|電子マネー/i.test(compact(line)) && !/[、,].*(?:カード|現金|クーポン)/.test(line));
   const paymentMethod = paymentLine ? compact(paymentLine).match(/クレジットカード|クレジット|PayPay|交通系IC|現金|電子マネー/i)?.[0] ?? null : null;
   const items = lines.filter(line => /コピー用紙|ボールペン|プリンター用紙|タクシー|乗車料金|運賃/.test(compact(line)));
-  const classification = rulesClassifier.classify({ merchant, totalYen: totalValues.length === 1 ? totalValues[0] : null, items, text: normalizedText, availableCategories: ["消耗品費", "旅費交通費"] });
+  const classification = rulesClassifier.classify({ merchant, totalYen: totalValues.length === 1 ? totalValues[0] : null, items, text: normalizedText, availableCategories: accountCategoryNames });
   const taxes = taxValues(lines, reasons);
   return {
-    version: "jp-receipt-2", candidates: { dates, totals, merchant: merchants }, classification,
+    version: "jp-receipt-3", candidates: { dates, totals, merchant: merchants }, classification,
     reasons: [...new Set([...reasons, ...classification.reasons])],
     values: { merchant, transactionDate: dateValues.length === 1 ? dateValues[0] : null, totalYen: totalValues.length === 1 ? totalValues[0] : null, taxes, paymentMethod, registrationNumber: registration ? `T${registration}` : null, items, summary: items.length ? items.join("、") : null, category: classification.category },
   };

@@ -12,7 +12,7 @@ export type ReceiptValues = {
   category: string | null;
 };
 export type ClassificationInput = Pick<ReceiptValues, "merchant" | "totalYen" | "items"> & { text: string; availableCategories: string[] };
-export type Classification = { category: string | null; reasons: string[]; rules: string[]; method: "rules"; version: string };
+export type Classification = { category: string | null; candidates?: string[]; reasons: string[]; rules: string[]; method: "rules"; version: string };
 export interface Classifier { classify(input: ClassificationInput): Classification }
 export type Extraction = {
   version: string; values: ReceiptValues; reasons: string[];
@@ -20,6 +20,7 @@ export type Extraction = {
   classification: Classification;
 };
 export type ReceiptView = {
+  classification?: Classification | null;
   version: number; userEdited: boolean;
   id: string; captureId: string; capturedAt: string; createdAt: string; acceptedAt: string | null;
   intakeState: string; archiveState: string; ocrState: string; reviewState: string;

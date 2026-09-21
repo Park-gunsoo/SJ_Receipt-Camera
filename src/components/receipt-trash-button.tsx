@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Trash2 } from "lucide-react";
 import type { ReceiptView } from "@/lib/contracts";
 import { formatPurchaseDate, formatYen } from "@/lib/i18n";
@@ -8,7 +9,7 @@ import { useApp } from "./app-provider";
 import { useLanguage } from "./language-provider";
 
 type ReceiptSummary = Pick<ReceiptView, "id" | "version" | "merchant" | "totalYen" | "transactionDate">;
-export function ReceiptTrashButton({ receipt, disabled, unsaved = false, onDeleted }: { receipt: ReceiptSummary; disabled?: boolean; unsaved?: boolean; onDeleted: () => void }) {
+export function ReceiptTrashButton({ receipt, disabled, unsaved = false, onDeleted, renderTrigger, onDismiss }: { receipt: ReceiptSummary; disabled?: boolean; unsaved?: boolean; onDeleted: () => void; renderTrigger?: (open: () => void, unavailable: boolean) => ReactNode; onDismiss?: () => void }) {
   const { t, locale } = useLanguage();
   const { account, online } = useApp();
   const dialog = useRef<HTMLDialogElement>(null);
@@ -32,15 +33,18 @@ export function ReceiptTrashButton({ receipt, disabled, unsaved = false, onDelet
       if (!controller.signal.aborted) setError(cause instanceof Error && ["RECEIPT_CHANGED", "NOT_FOUND", "ACCOUNT_CHANGED", "UNAUTHORIZED"].includes(cause.message) ? cause.message : "TRASH_FAILED");
     } finally { request.current = null; if (!controller.signal.aborted) setBusy(false); }
   };
+  const unavailable = Boolean(disabled || !online || !account?.user);
+  const open = () => { if (!unavailable) { setError(null); setSelected({ ...receipt }); } };
+  const dismiss = () => { setSelected(null); onDismiss?.(); };
   return <>
-    <button className="button trash-button" type="button" disabled={disabled || !online || !account?.user} onClick={() => { setError(null); setSelected({ ...receipt }); }}><Trash2 size={16} />{t("削除")}</button>
-    <dialog ref={dialog} className="trash-dialog" aria-labelledby={headingId} aria-describedby={descriptionId} onCancel={event => { if (busy) event.preventDefault(); else setSelected(null); }}>
+    {renderTrigger ? renderTrigger(open, unavailable) : <button className="button trash-button" type="button" disabled={unavailable} onClick={open}><Trash2 size={16} />{t("削除")}</button>}
+    {selected && createPortal(<dialog ref={dialog} className="trash-dialog" aria-labelledby={headingId} aria-describedby={descriptionId} onCancel={event => { if (busy) event.preventDefault(); else dismiss(); }}>
       <h2 id={headingId}>{t("ゴミ箱に移動しますか？")}</h2>
       {selected && <p className="trash-receipt-summary"><strong>{selected.merchant ?? t("店舗名 未確認")}</strong><span>{formatYen(selected.totalYen, locale)} · {selected.transactionDate ? formatPurchaseDate(selected.transactionDate, locale) : t("利用日 未確認")}</span></p>}
       <p id={descriptionId}>{t("通常の一覧から非表示になります。原本写真・PDF・Driveファイルは保管し、ゴミ箱から復元できます。")}</p>
       {unsaved && <p className="notice caution">{t("未保存の入力内容は破棄されます。")}</p>}
       {error && <p className="notice caution" role="alert">{errorMessage(error, locale)}</p>}
-      <div className="dialog-actions"><button type="button" className="button secondary" disabled={busy} onClick={() => setSelected(null)} autoFocus>{t("キャンセル")}</button><button type="button" className="button danger" disabled={busy || !online} onClick={remove}>{t(busy ? "移動中…" : "ゴミ箱に移動")}</button></div>
-    </dialog>
+      <div className="dialog-actions"><button type="button" className="button secondary" disabled={busy} onClick={dismiss} autoFocus>{t("キャンセル")}</button><button type="button" className="button danger" disabled={busy || !online} onClick={remove}>{t(busy ? "移動中…" : "ゴミ箱に移動")}</button></div>
+    </dialog>, document.body)}
   </>;
 }

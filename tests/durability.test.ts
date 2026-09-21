@@ -15,6 +15,10 @@ import { beginIntake, finishUpload, intake, ownedReceipt } from "../src/lib/rece
 import { claimJob, completeJob, reconcile, runJob } from "../src/lib/jobs";
 import { saveReceiptEdit } from "../src/lib/receipt-editor";
 import { listTrashedReceipts, setReceiptTrashed } from "../src/lib/receipt-trash";
+import { listReceiptLedger } from "../src/lib/receipt-ledger";
+import { defaultLedgerQuery } from "../src/lib/ledger-query";
+import { refreshReceiptClassification } from "../src/lib/refresh-classification";
+import { extractReceipt } from "../src/lib/extraction";
 
 let pg: PGlite, server: PGLiteSocketServer, image: Buffer;
 let userId: string;
@@ -32,10 +36,51 @@ beforeAll(async () => {
 });
 afterAll(async () => { await db().$disconnect(); await server.stop(); await pg.close(); vi.unstubAllEnvs(); });
 beforeEach(async () => {
+  await db().$executeRaw`TRUNCATE TABLE "User" CASCADE`;
   vi.clearAllMocks(); mocks.save.mockResolvedValue(undefined); mocks.exists.mockResolvedValue(true); mocks.read.mockResolvedValue(image); mocks.info.mockResolvedValue(null); mocks.archive.mockResolvedValue("drive-file"); mocks.dispatch.mockResolvedValue(undefined); mocks.pdfExists.mockResolvedValue(false); mocks.savePdf.mockResolvedValue(undefined);
   userId = (await db().user.create({ data: { googleSub: randomUUID(), email: `${randomUUID()}@example.test` } })).id;
 });
 describe("durable intake and jobs (real SQL, stubbed cloud boundaries)", () => {
+  it("filters the entire owned ledger by category/date/amount/status and excludes trash and incomplete uploads", async () => {
+    const base = { userId, capturedAt: new Date(), checksum: "test", byteLength: 1, mimeType: "image/jpeg", intakeState: "ACCEPTED" as const, ocrState: "DONE" as const };
+    const create = (extra: Record<string, unknown> = {}) => db().receipt.create({ data: { ...base, captureId: randomUUID(), objectKey: randomUUID(), ...extra } });
+    const target = await create({ merchant: "Target", transactionDate: "2026-09-21", totalYen: 0, values: { category: "車両費", summary: "Local test fuel" } });
+    await create({ merchant: "Other", transactionDate: "2026-08-01", totalYen: 100, values: { category: "車両費" } });
+    await create({ merchant: "Deleted", transactionDate: "2026-09-21", totalYen: 0, values: { category: "車両費" }, deletedAt: new Date() });
+    await create({ intakeState: "UPLOADING" });
+    const result = await listReceiptLedger(userId, { ...defaultLedgerQuery, q: "fuel", from: "2026-09-01", to: "2026-09-30", category: "車両費", min: 0, max: 0, status: "DONE" });
+    expect(result.total).toBe(1); expect(result.receipts[0].id).toBe(target.id);
+    expect((await listReceiptLedger("another-owner", defaultLedgerQuery)).total).toBe(0);
+    expect((await listReceiptLedger(userId, defaultLedgerQuery)).total).toBe(2);
+  });
+  it("paginates and sorts all matching rows with unknown dates last", async () => {
+    for (let i = 0; i < 28; i++) await db().receipt.create({ data: { userId, captureId: randomUUID(), objectKey: randomUUID(), capturedAt: new Date(), checksum: "test", byteLength: 1, mimeType: "image/jpeg", intakeState: "ACCEPTED", totalYen: i, transactionDate: i === 27 ? null : "2026-09-21" } });
+    const first = await listReceiptLedger(userId, { ...defaultLedgerQuery, sort: "amount", direction: "asc" });
+    const second = await listReceiptLedger(userId, { ...defaultLedgerQuery, sort: "amount", direction: "asc", page: 2 });
+    expect(first.total).toBe(28); expect(first.receipts).toHaveLength(25); expect(second.receipts.map(row => row.totalYen)).toEqual([25, 26, 27]);
+    const dates = await listReceiptLedger(userId, { ...defaultLedgerQuery, sort: "date", direction: "asc", page: 2 });
+    expect(dates.receipts.at(-1)!.transactionDate).toBeNull();
+    expect((await listReceiptLedger(userId, { ...defaultLedgerQuery, page: 999 })).page).toBe(2);
+  });
+  it("treats search metacharacters literally and filters JSON null/missing categories", async () => {
+    for (const [merchant, values] of [["100% sample", { category: null }], ["100 percent", { summary: "unknown category" }], ["known", { category: "消耗品費" }]] as const) await db().receipt.create({ data: { userId, captureId: randomUUID(), objectKey: randomUUID(), capturedAt: new Date(), checksum: "test", byteLength: 1, mimeType: "image/jpeg", intakeState: "ACCEPTED", merchant, values } });
+    expect((await listReceiptLedger(userId, { ...defaultLedgerQuery, q: "%" })).total).toBe(1);
+    expect((await listReceiptLedger(userId, { ...defaultLedgerQuery, q: "' OR 1=1 --" })).total).toBe(0);
+    expect((await listReceiptLedger(userId, { ...defaultLedgerQuery, category: "__unassigned__" })).total).toBe(2);
+  });
+  it("refreshes only classification from cached OCR while preserving dates, amounts and human edits", async () => {
+    const raw = { text: "ハイオク 30L\n合計 5000円" };
+    for (const userEdited of [false, true]) {
+      const old = extractReceipt(raw.text); old.classification = { category: null, reasons: ["用途を判断できる情報が不足しています"], rules: [], version: "rules-1", method: "rules" }; old.values.category = null;
+      const receipt = await db().receipt.create({ data: { userId, captureId: randomUUID(), objectKey: randomUUID(), capturedAt: new Date(), checksum: "test", byteLength: 1, mimeType: "image/jpeg", intakeState: "ACCEPTED", ocrState: "DONE", rawOcr: raw, extraction: JSON.parse(JSON.stringify(old)), values: { ...old.values, totalYen: 777, transactionDate: "2026-01-01", category: userEdited ? "Custom category" : null }, totalYen: 777, transactionDate: "2026-01-01", userEdited } });
+      expect(await refreshReceiptClassification(userId, receipt.id)).toBe("updated");
+      const updated = await ownedReceipt(userId, receipt.id);
+      expect(updated.totalYen).toBe(777); expect(updated.transactionDate).toBe("2026-01-01"); expect(updated.rawOcr).toEqual(raw);
+      expect(updated.values).toMatchObject({ totalYen: 777, category: userEdited ? "Custom category" : "車両費" });
+      expect(await refreshReceiptClassification(userId, receipt.id)).toBe("unchanged");
+      expect(mocks.vision).not.toHaveBeenCalled();
+    }
+  });
   it("moves owned receipts to trash and restores every stored value and revision", async () => {
     const receipt = await intake(userId, randomUUID(), new Date(), image, "image/jpeg");
     await db().receipt.update({ where: { id: receipt.id }, data: { ocrState: "DONE", pdfState: "SAVED", archiveState: "SAVED", driveFileId: "existing-test-drive-id", rawOcr: { text: "test evidence" } } });

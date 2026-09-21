@@ -16,6 +16,9 @@ npm run dev
 
 ## 구현 구성
 
+- `/web/receipts`: 장부형 표, 전체 데이터 기준 거래처·적요/날짜/계정과목/금액/인식·수정 상태 필터, 정렬·페이지 나누기와 행 작업 메뉴
+- 법인·개인 공통 계정과목 22개 및 사용자 정의 과목, 원문 근거 기반 자동 후보와 웹 수정. 확실하지 않은 음식·비품 등은 확인할 후보를 표시합니다. 세무상 비용 인정은 자동 확정하지 않습니다. 기준은 [ACCOUNTING_RULES.md](ACCOUNTING_RULES.md)를 참고하세요.
+
 - Next.js App Router, TypeScript, Tailwind CSS, 3개 언어 모바일 화면과 PC 영수증 관리·수정 화면
 - Google 로그인(NextAuth)과 선택형 Drive offline OAuth, 암호화한 refresh token
 - 새 Supabase 프로젝트의 PostgreSQL/Prisma, 비공개 GCS 사진, durable outbox, Cloud Tasks OIDC worker, Scheduler 복구

@@ -13,6 +13,7 @@ import { useApp } from "./app-provider";
 import { useLanguage } from "./language-provider";
 import { Status } from "./status";
 import { ReceiptTrashButton } from "./receipt-trash-button";
+import { CategoryField } from "./category-field";
 
 type TaxDraft = { rate: string; taxableYen: string; taxYen: string };
 type Draft = { merchant: string; transactionDate: string; totalYen: string; paymentMethod: string; registrationNumber: string; category: string; summary: string; taxes: TaxDraft[] };
@@ -31,7 +32,7 @@ function editValues(draft: Draft): ReceiptEdit["values"] {
   const text = (value: string) => value.trim() || null;
   return { merchant: text(draft.merchant), transactionDate: text(draft.transactionDate), totalYen: numberValue(draft.totalYen), paymentMethod: text(draft.paymentMethod), registrationNumber: text(draft.registrationNumber)?.toUpperCase() ?? null, category: text(draft.category), summary: text(draft.summary), taxes: draft.taxes.map(tax => ({ rate: numberValue(tax.rate, true), taxableYen: numberValue(tax.taxableYen), taxYen: numberValue(tax.taxYen) })).filter(tax => Object.values(tax).some(value => value !== null)) };
 }
-export function WebReceiptEditor({ id }: { id: string }) {
+export function WebReceiptEditor({ id, returnHref = "/web/receipts" }: { id: string; returnHref?: string }) {
   const router = useRouter();
   const { t, locale } = useLanguage();
   const { account } = useApp();
@@ -109,8 +110,8 @@ export function WebReceiptEditor({ id }: { id: string }) {
   if (!receipt || !draft) return <p className="loading-state">{t("読み込んでいます…")}</p>;
   const canEdit = ["DONE", "FAILED", "LIMIT_REACHED"].includes(receipt.ocrState);
   return <section className="web-editor">
-    <Link className="back-link" href="/web/receipts"><ArrowLeft size={18} />{t("履歴に戻る")}</Link>
-    <div className="editor-trash-action"><ReceiptTrashButton receipt={receipt} disabled={saving} unsaved={dirty} onDeleted={() => { loadGeneration.current++; dirtyRef.current = false; setDirty(false); router.replace("/web/trash"); }} /></div>
+    <div className="editor-topbar"><Link className="back-link" href={returnHref}><ArrowLeft size={18} />{t("帳簿に戻る")}</Link>
+    <ReceiptTrashButton receipt={receipt} disabled={saving} unsaved={dirty} onDeleted={() => { loadGeneration.current++; dirtyRef.current = false; setDirty(false); router.replace("/web/trash"); }} /></div>
     <div className="web-page-heading"><div><p className="eyebrow">{t("RECEIPT DETAILS")}</p><h1>{t("レシート詳細")}</h1><p className="page-lead">{t("原本を見ながら、読み取り内容を修正します。")}</p></div><Status receipt={receipt} /></div>
     <div className="editor-grid">
       <section className="editor-original card"><div className="image-toolbar"><h2>{t("原本画像")}</h2><button className="icon-button" onClick={() => setZoom(value => Math.max(0.5, value - 0.25))} aria-label={t("画像を縮小")}><Minus size={17} /></button><button className="icon-button" onClick={() => setZoom(value => Math.min(3, value + 0.25))} aria-label={t("画像を拡大")}><Plus size={17} /></button></div><div className="editor-image-scroll"><img src={`/api/receipts/${id}/image`} alt={t("撮影したレシートの原本")} style={{ width: `${zoom * 100}%` }} /></div><a className="text-link" href={`/api/receipts/${id}/image`} target="_blank" rel="noopener noreferrer">{t("原本を別のタブで開く")}<ExternalLink size={14} /></a><div className="two-actions">{(receipt.pdfState === "SAVED" || receipt.driveUrl) && <a className="button secondary" href={`/api/receipts/${id}/pdf`} target="_blank" rel="noopener noreferrer"><FileText size={16} />{t("PDFを見る")}</a>}{receipt.driveUrl && <a className="button secondary" href={receipt.driveUrl} target="_blank" rel="noopener noreferrer">{t("Driveで開く")}<ExternalLink size={14} /></a>}</div></section>
@@ -121,7 +122,7 @@ export function WebReceiptEditor({ id }: { id: string }) {
         <fieldset disabled={!canEdit || saving}>
           <div className="editor-fields"><label className="span-two">{t("店舗名")}<input value={draft.merchant} maxLength={100} onChange={e => change({ merchant: e.target.value })} /></label><label>{t("利用日")}<input type="date" value={draft.transactionDate} onChange={e => change({ transactionDate: e.target.value })} /></label><label>{t("合計金額")} (JPY)<input type="number" inputMode="numeric" min="0" max="999999999" step="1" value={draft.totalYen} onChange={e => change({ totalYen: e.target.value })} /></label></div>
           <section className="editor-taxes"><h3>{t("税額・税率")}</h3><p className="muted">{t("対象額は原本に記載された金額です。税込・税抜の表記も確認してください。")}</p>{draft.taxes.map((tax, index) => <div className="tax-edit-row" key={index}>{(["rate", "taxableYen", "taxYen"] as const).map(key => <label key={key}>{t(key === "rate" ? "税率" : key === "taxableYen" ? "対象額" : "税額")} {key === "rate" ? "(%)" : "(JPY)"}<input type="number" inputMode={key === "rate" ? "decimal" : "numeric"} min="0" max={key === "rate" ? "100" : "999999999"} step={key === "rate" ? "0.1" : "1"} value={tax[key]} onChange={e => change({ taxes: draft.taxes.map((row, i) => i === index ? { ...row, [key]: e.target.value } : row) })} /></label>)}<button className="icon-button" type="button" aria-label={t("この税区分を削除")} onClick={() => change({ taxes: draft.taxes.filter((_, i) => i !== index) })}><Trash2 size={16} /></button></div>)}<button className="text-link" type="button" disabled={draft.taxes.length >= 8} onClick={() => change({ taxes: [...draft.taxes, { rate: "", taxableYen: "", taxYen: "" }] })}><Plus size={15} />{t("税区分を追加")}</button></section>
-          <div className="editor-fields"><label>{t("支払方法")}<input value={draft.paymentMethod} maxLength={80} onChange={e => change({ paymentMethod: e.target.value })} /></label><label>{t("登録番号")}<input value={draft.registrationNumber} placeholder="T1234567890123" pattern="[Tt][0-9]{13}" maxLength={14} onChange={e => change({ registrationNumber: e.target.value })} /></label><label className="span-two">{t("勘定科目（候補）")}<input value={draft.category} maxLength={80} onChange={e => change({ category: e.target.value })} /></label><label className="span-two">{t("摘要")}<textarea value={draft.summary} maxLength={2000} rows={3} onChange={e => change({ summary: e.target.value })} /></label></div>
+          <div className="editor-fields"><label>{t("支払方法")}<input value={draft.paymentMethod} maxLength={80} onChange={e => change({ paymentMethod: e.target.value })} /></label><label>{t("登録番号")}<input value={draft.registrationNumber} placeholder="T1234567890123" pattern="[Tt][0-9]{13}" maxLength={14} onChange={e => change({ registrationNumber: e.target.value })} /></label><CategoryField value={draft.category} onChange={category => change({ category })} classification={receipt.classification} /><label className="span-two">{t("摘要")}<textarea value={draft.summary} maxLength={2000} rows={3} onChange={e => change({ summary: e.target.value })} /></label></div>
         </fieldset>
         {loadError && <p className="notice caution">{t("接続を確認して、もう一度お試しください。")}</p>}
         {dirty && receipt.version !== version && !saveError && <p className="notice caution">{t("別の更新があります。入力内容は保持しています。最新の内容を確認してから保存してください。")}</p>}

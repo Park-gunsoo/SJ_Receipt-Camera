@@ -1,4 +1,5 @@
 import catalog from "../../public/translations.json";
+import { categoryLabel } from "./account-categories";
 
 export type Locale = "ja" | "ko" | "en";
 export type MessageKey = keyof typeof catalog;
@@ -25,7 +26,7 @@ export function translate(locale: Locale, key: MessageKey, params: MessageParams
 }
 /** Translate recognized system labels only; never rewrite stored receipt evidence. */
 export function displayText(value: string, locale: Locale) {
-  return Object.hasOwn(catalog, value) ? translate(locale, value as MessageKey) : value;
+  return Object.hasOwn(catalog, value) ? translate(locale, value as MessageKey) : categoryLabel(value, locale);
 }
 export function formatYen(value: number | null, locale: Locale) {
   return value === null ? translate(locale, "未確認") : new Intl.NumberFormat(localeTags[locale], { style: "currency", currency: "JPY", currencyDisplay: "narrowSymbol", maximumFractionDigits: 0 }).format(value);

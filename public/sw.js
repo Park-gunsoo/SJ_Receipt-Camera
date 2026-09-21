@@ -1,4 +1,4 @@
-const CACHE = "sj-shell-v6-trash";
+const CACHE = "sj-shell-v7-ledger";
 const STATIC = ["/offline.html", "/offline-language.js", "/translations.json", "/icon-sj-192.png", "/icon-sj-512.png", "/mascot/sj-history.webp"];
 self.addEventListener("install", event => {
   event.waitUntil((async () => {
