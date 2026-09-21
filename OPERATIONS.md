@@ -6,7 +6,7 @@ Receipt.intakeState=ACCEPTED, acceptedAt 존재, 원본 GCS 객체/sha256/길이
 
 ## 작업 복구
 
-- Scheduler가 매분 reconcile 엔드포인트를 OIDC로 호출합니다. UPLOADING 상태에서 원본이 확인되면 접수와 2개 작업을 복구합니다.
+- Scheduler가 매분 reconcile 엔드포인트를 OIDC로 호출합니다. UPLOADING 상태에서 원본이 확인되면 접수와 PDF/OCR 작업을 복구하며, 접수 시 Drive 백업을 선택했다면 ARCHIVE 작업도 생성합니다.
 - PENDING/기한 만료 작업을 재등록합니다. RUNNING lease는 10분이며 이전 worker의 늦은 완료는 토큰이 달라 거부됩니다.
 - 자동 작업 시도는 기본 5회입니다. 앱 PDF는 별도의 PDF 작업이며 Drive와 무관하게 저장합니다. Drive 권한/용량 문제는 백업만 BLOCKED로 정지하고 재연결 후 재개합니다. 한도 초과 OCR은 다음 JST 날짜부터 다시 시도합니다.
 - FAILED는 무한 재시도하지 않습니다. 원인 해결 후 운영자가 대상 작업을 PENDING, attempts=0, nextRunAt=현재, lease=null, enqueuedAt=null로 변경해 재처리할 수 있습니다. DB 운영 작업은 대상 영수증/사용자를 확인한 후 수행합니다.
